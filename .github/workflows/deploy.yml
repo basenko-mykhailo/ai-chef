@@ -27,7 +27,7 @@ jobs:
             git fetch --all
             git reset --hard origin/main
 
-            UID=$(id -u) GID=$(id -g) docker compose up -d --build
+            env UID=$(id -u) GID=$(id -g) docker compose up -d --build
 
             docker compose exec -T php php artisan migrate --force
             docker compose exec -T php php artisan config:cache
