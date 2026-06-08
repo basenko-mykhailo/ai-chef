@@ -22,7 +22,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
-            cd /var/www/ai_chive
+            cd /var/www/ai_chef
 
             git fetch --all
             git reset --hard origin/main
