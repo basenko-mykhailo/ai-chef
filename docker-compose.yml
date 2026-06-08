@@ -1,0 +1,66 @@
+services:
+  web:
+    image: nginx:alpine
+    container_name: ai_chive_web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./src:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+    networks:
+      - ai_chive
+
+  php:
+    build:
+      context: ./docker/php
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    image: ai_chive/php:8.4-fpm
+    container_name: ai_chive_php
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./src:/var/www/html
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ai_chive
+      DB_USERNAME: ai_chive
+      DB_PASSWORD: secret
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ai_chive
+
+  db:
+    image: postgres:latest
+    container_name: ai_chive_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_chive
+      POSTGRES_USER: ai_chive
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_chive -d ai_chive"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ai_chive
+
+volumes:
+  pgdata:
+
+networks:
+  ai_chive:
+    driver: bridge

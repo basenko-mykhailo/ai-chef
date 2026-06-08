@@ -1,0 +1,27 @@
+# Repo-root ignores. The Laravel app under src/ has its own src/.gitignore
+# (vendor/, node_modules/, .env, build artifacts) — not duplicated here.
+
+# OS junk
+.DS_Store
+Thumbs.db
+*~
+
+# IDE / editors
+.idea/
+.vscode/
+.fleet/
+.nova/
+.zed/
+*.iml
+
+# Claude Code — commit shared commands/settings, ignore local overrides
+.claude/settings.local.json
+
+# Playwright MCP scratch output (page snapshots, console logs)
+.playwright-mcp/
+
+# Docker Compose env overrides (UID/GID, secrets) — keep an .env.example tracked
+/.env
+
+# Logs
+*.log
