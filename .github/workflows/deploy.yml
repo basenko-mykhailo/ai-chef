@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -17,15 +21,17 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /var/www/ai_chef
+            set -e
+            cd /var/www/ai_chive
 
-            git pull origin main
+            git fetch --all
+            git reset --hard origin/main
 
-            docker compose up -d --build
+            UID=$(id -u) GID=$(id -g) docker compose up -d --build
 
-            docker compose exec -T app php artisan migrate --force
-            docker compose exec -T app php artisan config:cache
-            docker compose exec -T app php artisan route:cache
-            docker compose exec -T app php artisan view:cache
+            docker compose exec -T php php artisan migrate --force
+            docker compose exec -T php php artisan config:cache
+            docker compose exec -T php php artisan route:cache
+            docker compose exec -T php php artisan view:cache
 
             echo "Deploy done at $(date)"
