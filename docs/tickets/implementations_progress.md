@@ -1,6 +1,6 @@
 # AI Chef — Implementation Progress
 
-> Snapshot date: 2026-05-13 (updated). Source plan: `docs/tickets/plan.md`.
+> Snapshot date: 2026-06-10 (updated). Source plan: `docs/tickets/plan.md`.
 > Legend: ✅ done · 🟡 partial · ⬜ not started
 
 ## Summary
@@ -10,7 +10,7 @@
 | 0. Foundation | ✅ done | All 6 tickets implemented |
 | 1. Pantry (manual input) | ⬜ not started | Route is a placeholder view; no models/migrations |
 | 2. Family members | 🟡 partial | 2.1 migration + 2.2 model + 2.3 list page + 2.4 add/edit form done; 2.5 pending |
-| 3. AI Core (recipe generation) | ⬜ not started | No services, jobs, models, or migrations |
+| 3. AI Core (recipe generation) | 🟡 partial | 3.1–3.6 done (migrations, `ClaudeService`, prompts+schema, response parser); jobs/cache/UI pending |
 | 4. "Cooked" → pantry deduction | ⬜ not started | Depends on Epic 1 + 3 |
 | 5. History & favorites | ⬜ not started | Route is a placeholder view |
 | 6. Photo pantry recognition | ⬜ not started | No upload UI or service |
@@ -57,11 +57,23 @@ Outstanding: 2.5.
 
 ---
 
-## Epic 3 — AI Core ⬜
+## Epic 3 — AI Core 🟡
 
-Nothing implemented. No `recipes` / `recipe_cache` migrations, no `app/Services/` directory (so no `ClaudeService`, `RecipePromptBuilder`), no `app/Jobs/` directory (so no `RecipeGenerationJob`). `/recipes` is a placeholder route. Queue connection is set to `database` and the jobs table migration exists, so infra is ready when the job is added.
+- ✅ **3.1 `recipes` migration** — `database/migrations/2026_06_10_165231_create_recipes_table.php` creates the table with `id`, `user_id` (FK → `users`, cascadeOnDelete), `name`, five NOT NULL json columns (`ingredients_json`, `steps_json`, `kbju_json`, `pantry_snapshot_json`, `selected_family_members_json`), `status` enum `generated|cooked` (default `generated`), `is_favorite` (default `false`), nullable `cooked_at`, and timestamps. `php artisan migrate` → DONE; `migrate:rollback --step=1` + re-migrate → DONE; `composer test` → 40/40 pass (sqlite `:memory:` builds the schema). Spec: `docs/tickets/epic-3/task-1.md`.
 
-Outstanding: 3.1 – 3.12 (all).
+- ✅ **3.2 `recipe_cache` migration** — `database/migrations/2026_06_10_170218_create_recipe_cache_table.php` creates the table (singular name, per plan) with `cache_key` (string PK), `response_json` (json NOT NULL), `model_used` (string), and `created_at` (`useCurrent()` + index for the future TTL cleanup). No `id`/`updated_at` — insert-only cache rows. `php artisan migrate` → DONE; `migrate:rollback --step=1` + re-migrate → DONE; `composer test` → 40/40 pass. Note for 3.9: the Eloquent model must set `protected $table = 'recipe_cache'`. Spec: `docs/tickets/epic-3/task-2.md`.
+
+- ✅ **3.3 Service `ClaudeService`** — official `anthropic-ai/sdk` (^0.29.1) added via composer. `src/app/Services/ClaudeService.php` wraps it with `generateText(array $messages, ?string $system = null, ?string $model = null): string` and `generateFromImage(array $images, string $prompt, ?string $model = null): string` (typed `ImageBlockParam`/`Base64ImageSource`/`TextBlockParam` blocks). Retry on 429/529/5xx is delegated to the SDK (`maxRetries: 2`, `timeout: 120s` set on the `Anthropic\Client` in `AppServiceProvider` singleton binding, key from `config('services.anthropic.api_key')`); the service adds `Log::error` context (model, status, error type — no key) and rethrows typed exceptions. `tests/Unit/ClaudeServiceTest.php` (5 tests) stubs a PSR-18 transporter to assert wire payloads (model/system/max_tokens, image `media_type` blocks), error logging, and singleton wiring — `composer test` → 45/45. Live tinker smoke through the container returned a real Haiku 4.5 response. Spec: `docs/tickets/epic-3/task-3.md`.
+
+- ✅ **3.4 Service `RecipePromptBuilder`** — `src/app/Services/RecipePromptBuilder.php` adds `build(User $user, array $members, array $pantry): array{system, user}` (Ukrainian prompts). System prompt encodes all fixed product rules: JSON-only response per `RecipeSchema::STRUCTURE`, broad allergy interpretation ("горіхи" → tree nuts + peanut; doubt → exclude), AND-combined member constraints, pantry-unit matching (closed enum), 1-2 staples with `in_pantry: false`, КБЖУ per portion. User prompt lists pantry rows (`name — qty unit`) and per-member non-empty constraints (алергії "суворо виключити" / неулюблене "уникати" / улюблене "бажано врахувати"). Pantry comes in as a plain array (PantryItem doesn't exist yet — 3.8 will map it); `$user` reserved per plan signature. `tests/Unit/RecipePromptBuilderTest.php` (7 tests incl. 0-members and empty-pantry edges) → `composer test` 52/52. Spec: `docs/tickets/epic-3/task-4.md`.
+
+- ✅ **3.5 Recipe JSON schema** — delivered together with 3.4 (user decision): `src/app/Services/RecipeSchema.php` fixes the canonical response structure as the `STRUCTURE` constant (name/description/ingredients[{name,quantity,unit,in_pantry}]/steps[]/kbju{kcal,protein,fat,carbs}/servings) plus contract constants for the 3.6 parser: `REQUIRED_KEYS`, `INGREDIENT_KEYS`, `KBJU_KEYS`, `ALLOWED_UNITS` (г/кг/мл/л/шт/ст.л./ч.л./склянка).
+
+- ✅ **3.6 Парсер відповіді Claude + валідація схеми** — `src/app/Services/RecipeResponseParser.php`: `parse(string $raw): array` зрізає markdown-обгортку (\`\`\`json), декодує JSON (`JSON_THROW_ON_ERROR`) і валідує проти контрактних констант `RecipeSchema` (всі `REQUIRED_KEYS`; `ingredients` непорожній, кожен елемент з `INGREDIENT_KEYS`, `quantity` > 0, `unit` ∈ `ALLOWED_UNITS`, `in_pantry` bool; `steps` непорожній список рядків; `kbju` з числовими `KBJU_KEYS`; `servings` ≥ 1), повертає нормалізований масив (лише 6 ключів, quantity/kbju → float, servings → int). `parseWithRetry(callable $generate, int $maxAttempts = 2)` — retry-цикл на невалідну відповідь (у 3.8 `$generate` буде замиканням навколо `ClaudeService::generateText`; transport-retry робить SDK). Перший кастомний виняток — `src/app/Exceptions/InvalidRecipeResponseException.php` з фабриками `invalidJson`/`missingKey`/`emptyList`/`invalidValue`, що називають причину (для логів 3.11). Чиста логіка без контейнера/мережі: `tests/Unit/RecipeResponseParserTest.php` (15 тестів) на plain PHPUnit TestCase. `composer test` → 67/67; pint чистий. Spec: `docs/tickets/epic-3/task-6.md`.
+
+No `app/Jobs/` directory (so no `RecipeGenerationJob`). `/recipes` is a placeholder route. Queue connection is set to `database` and the jobs table migration exists, so infra is ready when the job is added.
+
+Outstanding: 3.7 – 3.12.
 
 ---
 
@@ -104,4 +116,4 @@ Outstanding: 6.1 – 6.6 (all).
 
 ## Recommended next step
 
-Close Epic 2 with ticket 2.5 — delete a family member with a confirmation step. This needs a `FamilyMemberController@destroy` + `Route::delete('/family/{familyMember}')` (`family.destroy`), a delete button per row in `family/index.blade.php` (reuse the existing `x-modal` / `x-danger-button` components for confirmation), the same ownership guard as edit/update, and a feature test (owner can delete, 403 for others). After Epic 2 is closed, start Epic 1 (pantry) — it's the bigger unblocker for Epics 3/4/6. Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.
+Epic 3's pure-logic half is done (3.1–3.6: migrations, `ClaudeService`, prompts+schema, parser with retry). The remaining 3.7–3.10 (generation page + job + cache + recipe card) all want a real pantry to generate from, so the recommended next move is **Epic 1 (pantry)** — start with 1.1–1.2 (`ingredients` migration + seeder ≈150 products) and 1.3–1.4 (`Ingredient`/`PantryItem` models); that also unblocks Epics 4 and 6. Independently, Epic 2 still needs ticket 2.5 (delete a family member with confirmation: `FamilyMemberController@destroy` + `family.destroy` route, delete button with `x-modal`/`x-danger-button` confirmation, ownership guard, feature test). Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.
