@@ -8,7 +8,7 @@
 | Epic | Status | Notes |
 |---|---|---|
 | 0. Foundation | ✅ done | All 6 tickets implemented |
-| 1. Pantry (manual input) | ⬜ not started | Route is a placeholder view; no models/migrations |
+| 1. Pantry (manual input) | 🟡 partial | 1.1–1.4 done (ingredients + pantry_items migrations, ~170-item seeder, models + Unit enum); 1.5–1.9 UI pending |
 | 2. Family members | 🟡 partial | 2.1 migration + 2.2 model + 2.3 list page + 2.4 add/edit form done; 2.5 pending |
 | 3. AI Core (recipe generation) | 🟡 partial | 3.1–3.6 done (migrations, `ClaudeService`, prompts+schema, response parser); jobs/cache/UI pending |
 | 4. "Cooked" → pantry deduction | ⬜ not started | Depends on Epic 1 + 3 |
@@ -33,15 +33,19 @@
 
 ---
 
-## Epic 1 — Pantry (manual input) ⬜
+## Epic 1 — Pantry (manual input) 🟡
 
-Nothing implemented. Evidence:
-- `database/migrations/` contains only the three Laravel default migrations (`0001_01_01_*` users / cache / jobs). No `ingredients` or `pantry_items` migrations.
-- `database/seeders/` has only `DatabaseSeeder.php` (default). No `IngredientSeeder`.
-- `app/Models/` contains only `User.php`. No `Ingredient` or `PantryItem` models.
-- `/pantry` route renders the generic placeholder view.
+Data layer done (1.1–1.4); UI/CRUD pending (1.5–1.9).
 
-Outstanding: 1.1 – 1.9 (all).
+- ✅ **1.1 `ingredients` migration** — `database/migrations/2026_06_11_120000_create_ingredients_table.php`: `id`, `name` (indexed for autocomplete), `category` (nullable), `is_custom` (default false), `created_by_user_id` (nullable FK → users, `nullOnDelete`), timestamps.
+- ✅ **1.2 Ingredient seeder** — `database/seeders/IngredientSeeder.php` seeds ~170 Ukrainian catalog products across 14 categories (all `is_custom=false`), wired into `DatabaseSeeder`; idempotent (`firstOrCreate` on name).
+- ✅ **1.3 `pantry_items` migration** — `database/migrations/2026_06_11_120100_create_pantry_items_table.php`: `id`, `user_id` (FK cascade), `ingredient_id` (FK cascade), `quantity` (decimal 10,3), `unit` (enum `g/kg/ml/l/pcs/tbsp/tsp/cup`), timestamps.
+- ✅ **1.4 Models** — `app/Models/Ingredient.php` (`pantryItems()` hasMany, `creator()` belongsTo, scopes `availableTo(int $userId)` and `search(string $term)`, `is_custom` bool cast) and `app/Models/PantryItem.php` (`user()`/`ingredient()` belongsTo, `forUser(int $userId)` scope, casts `quantity`=`decimal:3` + `unit`=`App\Enums\Unit`). `User::pantryItems()` added. New `app/Enums/Unit.php` (8 units + Ukrainian `label()`/`options()`/`values()`). Factories `IngredientFactory` (+`custom()` state) and `PantryItemFactory`; starter `PantryItemSeeder` (6 items for `test@example.com`).
+- ⬜ **1.5–1.9 UI/CRUD** — pantry index page, add form with ingredient autocomplete (`/ingredients/search`), custom-ingredient-on-the-fly, edit/delete, validation. Next PR.
+
+Tests: `tests/Feature/PantryModelTest.php` (relations / scopes / casts), `tests/Feature/IngredientCatalogTest.php` (seeder ≥150 + `search`/`availableTo` scopes), `tests/Unit/UnitEnumTest.php`.
+
+Outstanding: 1.5 – 1.9.
 
 ---
 
