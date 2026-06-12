@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\GenerationStatus;
+use App\Http\Requests\GenerateRecipeRequest;
+use App\Jobs\GenerateRecipeJob;
 use App\Models\PantryItem;
-use Illuminate\Http\RedirectResponse;
+use App\Models\Recipe;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -33,13 +37,99 @@ class RecipeController extends Controller
     }
 
     /**
-     * Stub generation endpoint for ticket 3.7 — the page is fully clickable
-     * but no recipe is produced yet.
-     *
-     * TODO(3.8): replace with RecipeGenerationJob dispatch + cache lookup (3.9).
+     * Endpoint генерації (тікет 3.8): валідує обраних членів сім'ї, створює
+     * рецепт у стані `pending` зі снапшотами комори й обмежень, диспатчить
+     * GenerateRecipeJob (генерація може зайняти 10+ сек) і повертає URL, який
+     * фронт опитує. Кеш (3.9) і throttle (3.12) — окремі тікети.
      */
-    public function generate(Request $request): RedirectResponse
+    public function generate(GenerateRecipeRequest $request): JsonResponse
     {
-        return redirect()->route('recipes.create')->with('status', 'recipe-generation-pending');
+        $user = $request->user();
+
+        $pantry = $user->pantryItems()->with('ingredient')->get();
+
+        if ($pantry->isEmpty()) {
+            return response()->json(
+                ['message' => 'Комора порожня — додайте продукти перед генерацією.'],
+                422,
+            );
+        }
+
+        // Units use the Ukrainian label so the prompt (and Claude's reply) stay
+        // within RecipeSchema::ALLOWED_UNITS the parser validates against.
+        $pantrySnapshot = $pantry
+            ->map(fn (PantryItem $item) => [
+                'name' => (string) $item->ingredient?->name,
+                'quantity' => (float) $item->quantity,
+                'unit' => $item->unit->label(),
+            ])
+            ->values()
+            ->all();
+
+        $membersSnapshot = $user->familyMembers()
+            ->whereIn('id', $request->validated('members', []))
+            ->get()
+            ->map(fn ($member) => [
+                'name' => $member->name,
+                'favorite_products' => $member->favorite_products,
+                'disliked_products' => $member->disliked_products,
+                'allergies_and_diets' => $member->allergies_and_diets,
+            ])
+            ->values()
+            ->all();
+
+        $recipe = $user->recipes()->create([
+            // Placeholders for the NOT NULL AI columns until the job fills them in.
+            'name' => '',
+            'ingredients_json' => [],
+            'steps_json' => [],
+            'kbju_json' => [],
+            'generation_status' => GenerationStatus::Pending,
+            'pantry_snapshot_json' => $pantrySnapshot,
+            'selected_family_members_json' => $membersSnapshot,
+        ]);
+
+        GenerateRecipeJob::dispatch($recipe);
+
+        return response()->json([
+            'recipe_id' => $recipe->id,
+            'status_url' => route('api.recipes.status', $recipe),
+        ]);
+    }
+
+    /**
+     * Polling-ендпоінт (тікет 3.8): повертає поточний стан генерації; коли
+     * `completed` — додає посилання на готовий рецепт для redirect-у.
+     */
+    public function status(Request $request, Recipe $recipe): JsonResponse
+    {
+        abort_unless($recipe->user_id === $request->user()->id, 403);
+
+        $payload = [
+            'status' => $recipe->generation_status->value,
+            'error' => $recipe->generation_error,
+            'recipe' => null,
+        ];
+
+        if ($recipe->generation_status === GenerationStatus::Completed) {
+            $payload['recipe'] = [
+                'id' => $recipe->id,
+                'name' => $recipe->name,
+                'show_url' => route('recipes.show', $recipe),
+            ];
+        }
+
+        return response()->json($payload);
+    }
+
+    /**
+     * Мінімальна сторінка результату — ціль redirect-у після завершення
+     * генерації. Тікет 3.10 замінить її на повноцінну картку рецепту.
+     */
+    public function show(Request $request, Recipe $recipe): View
+    {
+        abort_unless($recipe->user_id === $request->user()->id, 403);
+
+        return view('recipes.show', ['recipe' => $recipe]);
     }
 }

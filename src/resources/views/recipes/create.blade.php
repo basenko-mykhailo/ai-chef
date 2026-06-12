@@ -6,16 +6,77 @@
         </div>
     </x-slot>
 
-    <div class="py-10">
-        <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
-            @if (session('status') === 'recipe-generation-pending')
-                <div class="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800"
-                     x-data="{ s: true }" x-show="s" x-init="setTimeout(() => s = false, 5000)" x-transition>
-                    Генерація рецептів буде доступна незабаром.
-                </div>
-            @endif
+    <style>[x-cloak]{display:none!important}</style>
 
-            <form method="post" action="{{ route('recipes.generate') }}">
+    <div class="py-10"
+         x-data="{
+            generating: false,
+            failed: false,
+            errorMessage: '',
+            pollTimer: null,
+
+            async start(event) {
+                this.failed = false;
+                this.errorMessage = '';
+                this.generating = true;
+
+                const form = event.target;
+
+                try {
+                    const res = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                            'Accept': 'application/json',
+                        },
+                        body: new FormData(form),
+                    });
+
+                    if (!res.ok) {
+                        const data = await res.json().catch(() => ({}));
+                        throw new Error(data.message || 'Не вдалося розпочати генерацію.');
+                    }
+
+                    const data = await res.json();
+                    this.poll(data.status_url);
+                } catch (e) {
+                    this.fail(e.message);
+                }
+            },
+
+            poll(statusUrl) {
+                this.pollTimer = setInterval(async () => {
+                    try {
+                        const res = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+                        const data = await res.json();
+
+                        if (data.status === 'completed' && data.recipe) {
+                            clearInterval(this.pollTimer);
+                            window.location = data.recipe.show_url;
+                        } else if (data.status === 'failed') {
+                            clearInterval(this.pollTimer);
+                            this.fail(data.error || 'Сталася помилка під час генерації.');
+                        }
+                    } catch (e) {
+                        clearInterval(this.pollTimer);
+                        this.fail('Сталася помилка мережі. Спробуйте ще раз.');
+                    }
+                }, 2000);
+            },
+
+            fail(message) {
+                this.generating = false;
+                this.failed = true;
+                this.errorMessage = message;
+            },
+         }">
+        <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+            <div x-show="failed" x-cloak
+                 class="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+                <span x-text="errorMessage"></span>
+            </div>
+
+            <form method="post" action="{{ route('api.recipes.generate') }}" x-on:submit.prevent="start($event)">
                 @csrf
 
                 {{-- Хто буде їсти --}}
@@ -101,14 +162,24 @@
                             🍳 Згенерувати рецепт
                         </button>
                     @else
-                        <button type="submit"
-                                class="inline-flex items-center justify-center px-8 py-4 bg-brand text-white text-lg font-semibold rounded-xl shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 transition">
+                        <button type="submit" x-bind:disabled="generating"
+                                class="inline-flex items-center justify-center px-8 py-4 bg-brand text-white text-lg font-semibold rounded-xl shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 transition disabled:opacity-60">
                             🍳 Згенерувати рецепт
                         </button>
                     @endif
                     <p class="mt-3 text-xs text-muted">Можна згенерувати до 10 рецептів на годину.</p>
                 </div>
             </form>
+        </div>
+
+        {{-- Спіннер на час генерації (10+ сек) --}}
+        <div x-show="generating" x-cloak
+             class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-ink/60 backdrop-blur-sm">
+            <svg class="animate-spin h-12 w-12 text-cream" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <p class="mt-4 text-cream font-medium">Генеруємо рецепт… Це може зайняти кілька секунд.</p>
         </div>
     </div>
 </x-app-layout>
