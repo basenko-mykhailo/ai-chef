@@ -55,4 +55,15 @@ class FamilyMemberController extends Controller
             ->route('family.index')
             ->with('status', 'family-member-updated');
     }
+
+    public function destroy(Request $request, FamilyMember $familyMember): RedirectResponse
+    {
+        abort_unless($familyMember->user_id === $request->user()->id, 403);
+
+        $familyMember->delete();
+
+        return redirect()
+            ->route('family.index')
+            ->with('status', 'family-member-deleted');
+    }
 }
