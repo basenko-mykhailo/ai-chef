@@ -29,6 +29,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/family', [FamilyMemberController::class, 'store'])->name('family.store');
     Route::get('/family/{familyMember}/edit', [FamilyMemberController::class, 'edit'])->name('family.edit');
     Route::patch('/family/{familyMember}', [FamilyMemberController::class, 'update'])->name('family.update');
+    Route::delete('/family/{familyMember}', [FamilyMemberController::class, 'destroy'])->name('family.destroy');
 
     Route::view('/recipes', 'placeholder', ['title' => 'Рецепти'])->name('recipes.index');
     Route::view('/history', 'placeholder', ['title' => 'Історія'])->name('history.index');

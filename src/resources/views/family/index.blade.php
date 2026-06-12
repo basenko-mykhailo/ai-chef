@@ -18,6 +18,8 @@
                         Члена сім'ї додано.
                     @elseif (session('status') === 'family-member-updated')
                         Зміни збережено.
+                    @elseif (session('status') === 'family-member-deleted')
+                        Члена сім'ї видалено.
                     @endif
                 </div>
             @endif
@@ -48,8 +50,16 @@
                                         <div class="mt-1 text-sm"><span class="text-gray-500">Алергії та дієти:</span> {{ $member->allergies_and_diets }}</div>
                                     @endif
                                 </div>
-                                <a href="{{ route('family.edit', $member) }}"
-                                   class="shrink-0 text-sm font-medium text-indigo-600 hover:text-indigo-900">Редагувати</a>
+                                <div class="shrink-0 flex items-center gap-3">
+                                    <a href="{{ route('family.edit', $member) }}"
+                                       class="text-sm font-medium text-indigo-600 hover:text-indigo-900">Редагувати</a>
+                                    <form method="post" action="{{ route('family.destroy', $member) }}"
+                                          onsubmit="return confirm('Видалити цього члена родини?')">
+                                        @csrf
+                                        @method('delete')
+                                        <button type="submit" class="text-sm font-medium text-red-600 hover:text-red-800">Видалити</button>
+                                    </form>
+                                </div>
                             </li>
                         @endforeach
                     </ul>

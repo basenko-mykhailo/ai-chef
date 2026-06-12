@@ -9,7 +9,7 @@
 |---|---|---|
 | 0. Foundation | ✅ done | All 6 tickets implemented |
 | 1. Pantry (manual input) | ✅ done | data layer (1.1–1.4) + full CRUD UI (1.5–1.9): pantry page, add/edit/delete, autocomplete, custom-on-the-fly, validation |
-| 2. Family members | 🟡 partial | 2.1 migration + 2.2 model + 2.3 list page + 2.4 add/edit form done; 2.5 pending |
+| 2. Family members | ✅ done | 2.1–2.4 + 2.5 delete (per-row button, confirmation, ownership guard) |
 | 3. AI Core (recipe generation) | 🟡 partial | 3.1–3.6 done (migrations, `ClaudeService`, prompts+schema, response parser); jobs/cache/UI pending |
 | 4. "Cooked" → pantry deduction | ⬜ not started | Depends on Epic 1 + 3 |
 | 5. History & favorites | ⬜ not started | Route is a placeholder view |
@@ -53,15 +53,15 @@ Outstanding: none — Epic 1 complete.
 
 ---
 
-## Epic 2 — Family members 🟡
+## Epic 2 — Family members ✅
 
 - ✅ **2.1 `family_members` migration** — `database/migrations/2026_05_13_165321_create_family_members_table.php` creates the table with `id`, `user_id` (FK → `users`, cascadeOnDelete), `name` (string), `favorite_products` / `disliked_products` / `allergies_and_diets` (text, nullable), and timestamps. Migration applied to dev DB (`php artisan migrate` → DONE).
 - ✅ **2.2 `FamilyMember` Eloquent model** — `src/app/Models/FamilyMember.php` adds the model with `#[Fillable]`, `belongsTo(User)` via `user()`, and `scopeForUser(int $userId)`. `src/app/Models/User.php` adds `familyMembers(): HasMany`. Factory at `src/database/factories/FamilyMemberFactory.php` (Ukrainian sample arrays + `User::factory()` FK). `src/database/seeders/FamilyMemberSeeder.php` creates 5 deterministic members (Тато, Мама, Бабуся, Син, Донька) for `test@example.com`, wired into `DatabaseSeeder`. `composer test --filter=FamilyMemberTest` → 3/3 pass; full suite 28/28.
 - ✅ **2.3 List page** — `src/app/Http/Controllers/FamilyMemberController.php` adds `index()` that loads `$request->user()->familyMembers()->orderBy('id')->get()`; `src/routes/web.php` swaps `Route::view('/family', …)` for `Route::get('/family', [FamilyMemberController::class, 'index'])->name('family.index')`. `src/resources/views/family/index.blade.php` renders a 1/2/3-col card grid with name + color-coded chips (`favorite_products` green / `disliked_products` amber / `allergies_and_diets` red), plus an empty-state block with CTA (CTA href is a `#` placeholder until 2.4 lands the create form). Feature test at `src/tests/Feature/FamilyMemberIndexTest.php` covers guest→login redirect, own-vs-other isolation, and empty state. `composer test --filter=FamilyMember` → 31/31 pass. `php artisan route:list --name=family` → `family.index → FamilyMemberController@index`. `php artisan migrate:fresh --seed` → DONE; logging in as `test@example.com` / `password` shows the 5 seeded cards.
 - ✅ **2.4 Add/edit form** — `FamilyMemberController` gains `create/store/edit/update`. Routes `family.create` (GET `/family/create`), `family.store` (POST `/family`), `family.edit` (GET `/family/{familyMember}/edit`), `family.update` (PATCH `/family/{familyMember}`) added under `auth`. Validation in `app/Http/Requests/FamilyMemberRequest.php` (name required ≤255; three text fields nullable ≤1000; Ukrainian messages/attributes). Shared Blade form `resources/views/family/partials/form.blade.php` (name input + three placeholder-hinted textareas) used by new `family/create.blade.php` and `family/edit.blade.php`; new reusable `components/textarea.blade.php`. `family/index.blade.php` now has a "Додати члена сім'ї" CTA (header + empty state), per-row "Редагувати" links, and a success flash. Ownership enforced: create binds `user_id` via the relationship (no spoofing); edit/update return 403 for другого юзера (`FamilyMemberRequest::authorize()` runs before validation; `edit()` guards with `abort_unless`). Tests: `tests/Feature/FamilyMemberFormTest.php` (9 cases — view/create/validation/spoof-guard/edit/update/403s). This also satisfies the pre-existing `FamilyMemberIndexTest` empty-state assertions (`Ще немає членів сім'ї` + `Додати члена сім'ї`) that the old placeholder copy did not.
-- ⬜ **2.5 Delete flow** — no delete action / confirmation modal.
+- ✅ **2.5 Delete flow** — `FamilyMemberController@destroy` + `DELETE /family/{familyMember}` (`family.destroy`). Per-row «Видалити» button on `family/index.blade.php` with JS `confirm`; ownership guard (`abort_unless` → 403); `family-member-deleted` flash. Test `tests/Feature/FamilyMemberDeleteTest.php` (guest redirect / owner deletes / 403 for others).
 
-Outstanding: 2.5.
+Outstanding: none — Epic 2 complete.
 
 ---
 
