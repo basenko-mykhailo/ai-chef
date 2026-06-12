@@ -35,4 +35,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(FamilyMember::class);
     }
+
+    public function pantryItems(): HasMany
+    {
+        return $this->hasMany(PantryItem::class);
+    }
 }
