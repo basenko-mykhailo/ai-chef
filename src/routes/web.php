@@ -4,6 +4,7 @@ use App\Http\Controllers\FamilyMemberController;
 use App\Http\Controllers\IngredientController;
 use App\Http\Controllers\PantryController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RecipeController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -32,6 +33,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/family/{familyMember}', [FamilyMemberController::class, 'destroy'])->name('family.destroy');
 
     Route::view('/recipes', 'placeholder', ['title' => 'Рецепти'])->name('recipes.index');
+    Route::get('/recipes/create', [RecipeController::class, 'create'])->name('recipes.create');
+    Route::post('/recipes/generate', [RecipeController::class, 'generate'])->name('recipes.generate');
     Route::view('/history', 'placeholder', ['title' => 'Історія'])->name('history.index');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

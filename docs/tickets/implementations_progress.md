@@ -10,7 +10,7 @@
 | 0. Foundation | ✅ done | All 6 tickets implemented |
 | 1. Pantry (manual input) | ✅ done | data layer (1.1–1.4) + full CRUD UI (1.5–1.9): pantry page, add/edit/delete, autocomplete, custom-on-the-fly, validation |
 | 2. Family members | ✅ done | 2.1–2.4 + 2.5 delete (per-row button, confirmation, ownership guard) |
-| 3. AI Core (recipe generation) | 🟡 partial | 3.1–3.6 done (migrations, `ClaudeService`, prompts+schema, response parser); jobs/cache/UI pending |
+| 3. AI Core (recipe generation) | 🟡 partial | 3.1–3.7 done (migrations, `ClaudeService`, prompts+schema, parser, generation page); job/cache/recipe-card pending |
 | 4. "Cooked" → pantry deduction | ⬜ not started | Depends on Epic 1 + 3 |
 | 5. History & favorites | ⬜ not started | Route is a placeholder view |
 | 6. Photo pantry recognition | ⬜ not started | No upload UI or service |
@@ -79,9 +79,11 @@ Outstanding: none — Epic 2 complete.
 
 - ✅ **3.6 Парсер відповіді Claude + валідація схеми** — `src/app/Services/RecipeResponseParser.php`: `parse(string $raw): array` зрізає markdown-обгортку (\`\`\`json), декодує JSON (`JSON_THROW_ON_ERROR`) і валідує проти контрактних констант `RecipeSchema` (всі `REQUIRED_KEYS`; `ingredients` непорожній, кожен елемент з `INGREDIENT_KEYS`, `quantity` > 0, `unit` ∈ `ALLOWED_UNITS`, `in_pantry` bool; `steps` непорожній список рядків; `kbju` з числовими `KBJU_KEYS`; `servings` ≥ 1), повертає нормалізований масив (лише 6 ключів, quantity/kbju → float, servings → int). `parseWithRetry(callable $generate, int $maxAttempts = 2)` — retry-цикл на невалідну відповідь (у 3.8 `$generate` буде замиканням навколо `ClaudeService::generateText`; transport-retry робить SDK). Перший кастомний виняток — `src/app/Exceptions/InvalidRecipeResponseException.php` з фабриками `invalidJson`/`missingKey`/`emptyList`/`invalidValue`, що називають причину (для логів 3.11). Чиста логіка без контейнера/мережі: `tests/Unit/RecipeResponseParserTest.php` (15 тестів) на plain PHPUnit TestCase. `composer test` → 67/67; pint чистий. Spec: `docs/tickets/epic-3/task-6.md`.
 
-No `app/Jobs/` directory (so no `RecipeGenerationJob`). `/recipes` is a placeholder route. Queue connection is set to `database` and the jobs table migration exists, so infra is ready when the job is added.
+- ✅ **3.7 Сторінка генерації рецепту** — new `app/Http/Controllers/RecipeController.php`: `create()` renders the page from `$user->pantryItems()->with('ingredient')` + `$user->familyMembers()`; stub `generate()` flashes `recipe-generation-pending` and redirects back (`// TODO(3.8)`, no recipe created). Routes `recipes.create` (GET `/recipes/create`) + `recipes.generate` (POST `/recipes/generate`) added under `auth` in `routes/web.php` (placeholder `recipes.index` kept). View `resources/views/recipes/create.blade.php` (brand palette): family-member checkboxes **all checked by default** (`name="members[]"`), read-only pantry list (`Unit::label()` + trimmed quantity), large «Згенерувати рецепт» button. Edge cases: empty pantry → notice + link to `pantry.create` and disabled button; zero members → «для себе» hint with active button; visible "10 генерацій на годину" hint (real throttle is 3.12). Nav «Рецепти» (desktop + mobile in `layouts/navigation.blade.php`) now points to `recipes.create`. Test `tests/Feature/RecipeGenerationPageTest.php` (6 cases: guest redirect, own-vs-other isolation, default-checked, empty-pantry disabled, zero-members hint, stub redirect + `assertDatabaseCount('recipes', 0)`). `composer test` → 102/102; `pint` clean. Spec: `docs/tickets/epic-3/task-7.md`.
 
-Outstanding: 3.7 – 3.12.
+Still no `app/Jobs/` directory (so no `RecipeGenerationJob`); the 3.7 button POSTs to the stub `recipes.generate`. Queue connection is `database` and the jobs table migration exists, so infra is ready when the job is added.
+
+Outstanding: 3.8 – 3.12.
 
 ---
 
@@ -124,4 +126,4 @@ Outstanding: 6.1 – 6.6 (all).
 
 ## Recommended next step
 
-Epic 3's pure-logic half is done (3.1–3.6: migrations, `ClaudeService`, prompts+schema, parser with retry). The remaining 3.7–3.10 (generation page + job + cache + recipe card) all want a real pantry to generate from, so the recommended next move is **Epic 1 (pantry)** — start with 1.1–1.2 (`ingredients` migration + seeder ≈150 products) and 1.3–1.4 (`Ingredient`/`PantryItem` models); that also unblocks Epics 4 and 6. Independently, Epic 2 still needs ticket 2.5 (delete a family member with confirmation: `FamilyMemberController@destroy` + `family.destroy` route, delete button with `x-modal`/`x-danger-button` confirmation, ownership guard, feature test). Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.
+Epics 1 and 2 are complete and Epic 3 now has its full pure-logic half (3.1–3.6) plus the generation page (3.7). The clear next move is **3.8 Endpoint + Queue Job** — replace the stub `RecipeController@generate` with a real flow: validate the submitted `members[]` against the user's `FamilyMember`s, build the prompt via `RecipePromptBuilder`, dispatch a new `app/Jobs/RecipeGenerationJob` (queue is `database`) that calls `ClaudeService::generateText` through `RecipeResponseParser::parseWithRetry`, and surface progress to the UI (spinner + polling or redirect). 3.9 (cache lookup before the API call) and 3.10 (recipe card) build directly on it. Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.

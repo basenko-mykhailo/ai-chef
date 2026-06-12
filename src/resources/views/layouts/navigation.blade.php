@@ -21,7 +21,7 @@
                     <x-nav-link :href="route('family.index')" :active="request()->routeIs('family.*')">
                         Сім'я
                     </x-nav-link>
-                    <x-nav-link :href="route('recipes.index')" :active="request()->routeIs('recipes.*')">
+                    <x-nav-link :href="route('recipes.create')" :active="request()->routeIs('recipes.*')">
                         Рецепти
                     </x-nav-link>
                     <x-nav-link :href="route('history.index')" :active="request()->routeIs('history.*')">
@@ -85,7 +85,7 @@
             <x-responsive-nav-link :href="route('family.index')" :active="request()->routeIs('family.*')">
                 Сім'я
             </x-responsive-nav-link>
-            <x-responsive-nav-link :href="route('recipes.index')" :active="request()->routeIs('recipes.*')">
+            <x-responsive-nav-link :href="route('recipes.create')" :active="request()->routeIs('recipes.*')">
                 Рецепти
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('history.index')" :active="request()->routeIs('history.*')">
