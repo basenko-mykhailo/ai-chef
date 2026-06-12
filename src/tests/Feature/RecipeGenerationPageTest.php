@@ -82,18 +82,4 @@ class RecipeGenerationPageTest extends TestCase
         $response->assertSee('без додаткових обмежень');
         $response->assertDontSee('cursor-not-allowed', false); // button is active
     }
-
-    public function test_generate_is_a_stub_that_flashes_and_creates_no_recipe(): void
-    {
-        $user = User::factory()->create();
-        $member = FamilyMember::factory()->create(['user_id' => $user->id]);
-
-        $response = $this->actingAs($user)->post('/recipes/generate', [
-            'members' => [$member->id],
-        ]);
-
-        $response->assertRedirect(route('recipes.create'));
-        $response->assertSessionHas('status', 'recipe-generation-pending');
-        $this->assertDatabaseCount('recipes', 0);
-    }
 }

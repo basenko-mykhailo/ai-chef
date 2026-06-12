@@ -34,7 +34,9 @@ Route::middleware('auth')->group(function () {
 
     Route::view('/recipes', 'placeholder', ['title' => 'Рецепти'])->name('recipes.index');
     Route::get('/recipes/create', [RecipeController::class, 'create'])->name('recipes.create');
-    Route::post('/recipes/generate', [RecipeController::class, 'generate'])->name('recipes.generate');
+    Route::get('/recipes/{recipe}', [RecipeController::class, 'show'])->name('recipes.show');
+    Route::post('/api/recipes/generate', [RecipeController::class, 'generate'])->name('api.recipes.generate');
+    Route::get('/api/recipes/{recipe}/status', [RecipeController::class, 'status'])->name('api.recipes.status');
     Route::view('/history', 'placeholder', ['title' => 'Історія'])->name('history.index');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
