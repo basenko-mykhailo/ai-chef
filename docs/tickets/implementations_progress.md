@@ -8,7 +8,7 @@
 | Epic | Status | Notes |
 |---|---|---|
 | 0. Foundation | ✅ done | All 6 tickets implemented |
-| 1. Pantry (manual input) | 🟡 partial | 1.1–1.4 done (ingredients + pantry_items migrations, ~170-item seeder, models + Unit enum); 1.5–1.9 UI pending |
+| 1. Pantry (manual input) | ✅ done | data layer (1.1–1.4) + full CRUD UI (1.5–1.9): pantry page, add/edit/delete, autocomplete, custom-on-the-fly, validation |
 | 2. Family members | 🟡 partial | 2.1 migration + 2.2 model + 2.3 list page + 2.4 add/edit form done; 2.5 pending |
 | 3. AI Core (recipe generation) | 🟡 partial | 3.1–3.6 done (migrations, `ClaudeService`, prompts+schema, response parser); jobs/cache/UI pending |
 | 4. "Cooked" → pantry deduction | ⬜ not started | Depends on Epic 1 + 3 |
@@ -33,19 +33,23 @@
 
 ---
 
-## Epic 1 — Pantry (manual input) 🟡
+## Epic 1 — Pantry (manual input) ✅
 
-Data layer done (1.1–1.4); UI/CRUD pending (1.5–1.9).
+All 9 tickets done — data layer (1.1–1.4) + CRUD UI (1.5–1.9).
 
 - ✅ **1.1 `ingredients` migration** — `database/migrations/2026_06_11_120000_create_ingredients_table.php`: `id`, `name` (indexed for autocomplete), `category` (nullable), `is_custom` (default false), `created_by_user_id` (nullable FK → users, `nullOnDelete`), timestamps.
 - ✅ **1.2 Ingredient seeder** — `database/seeders/IngredientSeeder.php` seeds ~170 Ukrainian catalog products across 14 categories (all `is_custom=false`), wired into `DatabaseSeeder`; idempotent (`firstOrCreate` on name).
 - ✅ **1.3 `pantry_items` migration** — `database/migrations/2026_06_11_120100_create_pantry_items_table.php`: `id`, `user_id` (FK cascade), `ingredient_id` (FK cascade), `quantity` (decimal 10,3), `unit` (enum `g/kg/ml/l/pcs/tbsp/tsp/cup`), timestamps.
 - ✅ **1.4 Models** — `app/Models/Ingredient.php` (`pantryItems()` hasMany, `creator()` belongsTo, scopes `availableTo(int $userId)` and `search(string $term)`, `is_custom` bool cast) and `app/Models/PantryItem.php` (`user()`/`ingredient()` belongsTo, `forUser(int $userId)` scope, casts `quantity`=`decimal:3` + `unit`=`App\Enums\Unit`). `User::pantryItems()` added. New `app/Enums/Unit.php` (8 units + Ukrainian `label()`/`options()`/`values()`). Factories `IngredientFactory` (+`custom()` state) and `PantryItemFactory`; starter `PantryItemSeeder` (6 items for `test@example.com`).
-- ⬜ **1.5–1.9 UI/CRUD** — pantry index page, add form with ingredient autocomplete (`/ingredients/search`), custom-ingredient-on-the-fly, edit/delete, validation. Next PR.
+- ✅ **1.5 Pantry index** — `PantryController@index` + `resources/views/pantry/index.blade.php`: brand-styled (dark-green/cream from Figma) list of the user's items (name, category, quantity + Ukrainian unit label), empty state, "Додати продукт" CTA, per-row "Змінити"/"Видалити". `/pantry` route now controller-backed (was placeholder).
+- ✅ **1.6 Add form + autocomplete** — `pantry/create.blade.php` + shared `pantry/partials/form.blade.php` (Alpine). Ingredient name field autocompletes via new `GET /ingredients/search?q=` (`IngredientController@search` → `Ingredient::availableTo($uid)->search($q)`, JSON, max 10). Quantity + unit `<select>` (from `Unit::options()`).
+- ✅ **1.7 Custom ingredient on the fly** — `PantryController::resolveIngredient()`: picked id (validated against `availableTo`) → existing row; else case-insensitive name match; else creates `is_custom=true` + `created_by_user_id` ingredient. Optional category field shown only for new products.
+- ✅ **1.8 Edit / delete** — `edit/update/destroy` with ownership guard (`PantryItemRequest::authorize()` for update → 403 before validation; `abort_unless` for edit/destroy). Delete via per-row form + JS confirm.
+- ✅ **1.9 Validation** — `app/Http/Requests/PantryItemRequest.php`: `ingredient_name` required ≤100; `quantity` required numeric `gt:0`; `unit` ∈ `Unit::values()`; `category` nullable ≤50; `ingredient_id` nullable exists. Ukrainian messages.
 
-Tests: `tests/Feature/PantryModelTest.php` (relations / scopes / casts), `tests/Feature/IngredientCatalogTest.php` (seeder ≥150 + `search`/`availableTo` scopes), `tests/Unit/UnitEnumTest.php`.
+Tests: `PantryModelTest`, `IngredientCatalogTest`, `UnitEnumTest` (data layer); `PantryCrudTest` (10: CRUD, custom-on-the-fly, validation, 403s), `IngredientSearchTest` (4). Brand colors added to `resources/css/app.css` `@theme` (`brand`/`cream`/`beige`/`ink`/`muted`). Verified live: `/pantry`, `/pantry/create`, autocomplete all 200.
 
-Outstanding: 1.5 – 1.9.
+Outstanding: none — Epic 1 complete.
 
 ---
 

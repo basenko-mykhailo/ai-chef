@@ -7,4 +7,15 @@
 @theme {
     --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
         "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+    /* AI-Chef brand palette (from Figma UI Kit) */
+    --color-brand: #143216;          /* темно зелений — headers / primary */
+    --color-brand-accent: #55b03f;   /* зелений акцент */
+    --color-brand-accent-light: #71c55d;
+    --color-cream: #faf5ed;          /* кремовий — backgrounds */
+    --color-beige: #dfcdc1;
+    --color-ink: #30302c;            /* dark text */
+    --color-muted: #727073;          /* secondary text */
 }
+
+[x-cloak] { display: none !important; }
