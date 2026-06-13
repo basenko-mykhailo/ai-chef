@@ -80,7 +80,7 @@ services:
       # declared VOLUME). Mounting the named volume at the parent dir leaves the
       # real data in a throwaway anonymous volume that is lost on container
       # recreation — mount the data dir itself so pgdata actually persists.
-      - pgdata_1:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
