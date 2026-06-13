@@ -25,3 +25,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# MCP server config (contains FIGMA_API_KEY and other secrets)
+.mcp.json

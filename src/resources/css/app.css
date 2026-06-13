@@ -5,17 +5,23 @@
 @source "../**/*.js";
 
 @theme {
-    --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    /* Body / UI font — Figma uses Inter throughout the app screens */
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
         "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    /* Display headings (hero / section titles) — Figma uses Oswald */
+    --font-display: "Oswald", "Inter", ui-sans-serif, system-ui, sans-serif;
+    /* Brand wordmark "AI-CHEF" — Figma uses Playfair Display SC */
+    --font-brand: "Playfair Display SC", "Playfair Display", Georgia, serif;
 
-    /* AI-Chef brand palette (from Figma UI Kit) */
-    --color-brand: #143216;          /* темно зелений — headers / primary */
-    --color-brand-accent: #55b03f;   /* зелений акцент */
-    --color-brand-accent-light: #71c55d;
-    --color-cream: #faf5ed;          /* кремовий — backgrounds */
-    --color-beige: #dfcdc1;
-    --color-ink: #30302c;            /* dark text */
-    --color-muted: #727073;          /* secondary text */
+    /* AI-Chef brand palette — sampled from Figma file kSDCaH3wbbRbiHzW0ZPZBN */
+    --color-brand: #143216;          /* темно-зелений — headers / primary */
+    --color-brand-accent: #93b875;   /* зелений акцент — кнопки дій */
+    --color-brand-accent-light: #aecb96;
+    --color-cream: #faf5ed;          /* кремовий — картки / світлі поверхні */
+    --color-sand: #f4e9d5;           /* теплий пісочний — фон сторінок застосунку */
+    --color-beige: #dfcdc1;          /* беж — другорядні картки / бордери */
+    --color-ink: #30302c;            /* темний — текст / темні секції */
+    --color-muted: #727073;          /* другорядний текст */
 }
 
 [x-cloak] { display: none !important; }
