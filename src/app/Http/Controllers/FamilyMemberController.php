@@ -22,7 +22,7 @@ class FamilyMemberController extends Controller
     public function create(): View
     {
         return view('family.create', [
-            'member' => new FamilyMember(),
+            'member' => new FamilyMember,
         ]);
     }
 

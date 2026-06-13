@@ -26,7 +26,7 @@ class PantryController extends Controller
     public function create(): View
     {
         return view('pantry.create', [
-            'item' => new PantryItem(),
+            'item' => new PantryItem,
             'units' => Unit::options(),
         ]);
     }

@@ -10,7 +10,7 @@
 | 0. Foundation | ✅ done | All 6 tickets implemented |
 | 1. Pantry (manual input) | ✅ done | data layer (1.1–1.4) + full CRUD UI (1.5–1.9): pantry page, add/edit/delete, autocomplete, custom-on-the-fly, validation |
 | 2. Family members | ✅ done | 2.1–2.4 + 2.5 delete (per-row button, confirmation, ownership guard) |
-| 3. AI Core (recipe generation) | 🟡 partial | 3.1–3.11 done (migrations, `ClaudeService`, prompts+schema, parser, generation page, endpoint+job, cache, recipe card, error handling); rate-limit (3.12) pending. Full suite (136 tests) runs green in the `php` container |
+| 3. AI Core (recipe generation) | ✅ done | 3.1–3.12 done (migrations, `ClaudeService`, prompts+schema, parser, generation page, endpoint+job, cache, recipe card, error handling, rate limit). Full suite (138 tests) runs green in the `php` container |
 | 4. "Cooked" → pantry deduction | ⬜ not started | Depends on Epic 1 + 3 |
 | 5. History & favorites | ⬜ not started | Route is a placeholder view |
 | 6. Photo pantry recognition | ⬜ not started | No upload UI or service |
@@ -65,7 +65,7 @@ Outstanding: none — Epic 2 complete.
 
 ---
 
-## Epic 3 — AI Core 🟡
+## Epic 3 — AI Core ✅
 
 - ✅ **3.1 `recipes` migration** — `database/migrations/2026_06_10_165231_create_recipes_table.php` creates the table with `id`, `user_id` (FK → `users`, cascadeOnDelete), `name`, five NOT NULL json columns (`ingredients_json`, `steps_json`, `kbju_json`, `pantry_snapshot_json`, `selected_family_members_json`), `status` enum `generated|cooked` (default `generated`), `is_favorite` (default `false`), nullable `cooked_at`, and timestamps. `php artisan migrate` → DONE; `migrate:rollback --step=1` + re-migrate → DONE; `composer test` → 40/40 pass (sqlite `:memory:` builds the schema). Spec: `docs/tickets/epic-3/task-1.md`.
 
@@ -92,7 +92,9 @@ Outstanding: none — Epic 2 complete.
 
 - ✅ **3.11 Обробка помилок генерації** — `app/Jobs/GenerateRecipeJob.php` now maps the failure cause to a friendly Ukrainian `generation_error` (three private consts): `InvalidRecipeResponseException` → «AI повернув некоректну відповідь…»; any other caught `Throwable` (API/network/rate-limit/SDK-timeout) → «Сервіс генерації тимчасово недоступний…»; the `failed()` worker-timeout hook → «Генерація зайняла забагато часу…». Technical detail (exception class + message) stays in `Log::error` only — never in `generation_error`/UI (`markFailed(string $message)` now takes the text). UI retry: `resources/views/recipes/create.blade.php` failed banner gains an explicit «Спробувати ще раз» button (Alpine `retry()` → `requestSubmit()` re-runs `start()`); `resources/views/recipes/show.blade.php` splits the non-completed block so `Failed` renders a red box + brand «Спробувати ще раз» → `recipes.create` (pending/processing keep the amber «ще не готовий» box). Tests: strengthened `GenerateRecipeJobTest` api-failure/invalid-JSON cases (assert friendly text + no technical leak) + new worker-timeout-hook case; new `RecipeShowTest::test_failed_recipe_shows_error_and_retry_button` and `RecipeGenerationPageTest::test_page_renders_retry_button_in_failed_banner`. `composer test` → 136/136; `pint` clean. No migration (`generation_status`/`generation_error` shipped in 3.8). Spec: `docs/tickets/epic-3/task-11.md`.
 
-Outstanding: 3.12 (rate limiting).
+- ✅ **3.12 Rate limiting на генерацію** — named limiter `recipe-generation` registered in `app/Providers/AppServiceProvider.php` `boot()` as `Limit::perHour(10)->by(user id ?: ip)` with a custom Ukrainian JSON `429` (`->response(...)` → «Ви досягли ліміту — до 10 рецептів на годину…»). Applied via `->middleware('throttle:recipe-generation')` on `POST /api/recipes/generate` in `routes/web.php` (`route:list` confirms it); the 2s-polled `status` endpoint stays unthrottled. The 429 `message` is surfaced by the existing 3.11 failed banner («Спробувати ще раз») — no view changes. Per-user counter (id key, IP fallback). Test `tests/Feature/RecipeGenerationThrottleTest.php` (2 — 11th call → 429 with the Ukrainian copy; per-user isolation, both with `Queue::fake()`). `composer test` → 138/138; the new files are `pint`-clean. No migration. Spec: `docs/tickets/epic-3/task-12.md`.
+
+Outstanding: none — Epic 3 complete.
 
 ---
 
@@ -135,6 +137,6 @@ Outstanding: 6.1 – 6.6 (all).
 
 ## Recommended next step
 
-3.1–3.11 are done and the full suite (136 tests) runs green in the `php` container, so the AI core's data + generation + cache path, the result card, **and** friendly error handling (cause-specific message + «Спробувати ще раз») are complete (still worth a live smoke with a real `ANTHROPIC_API_KEY` + `queue:listen` worker to exercise a real Claude round-trip, confirm a second identical generation hits `recipe_cache`, and force a failure to see the friendly retry path).
+**Epic 3 is complete** (3.1–3.12) and the full suite (138 tests) runs green in the `php` container — the AI core's data + generation + cache path, the result card, friendly error handling (cause-specific message + «Спробувати ще раз»), **and** the 10 gen/hr rate limit are all in. Still worth a live smoke with a real `ANTHROPIC_API_KEY` + `queue:listen` worker to exercise a real Claude round-trip, confirm a second identical generation hits `recipe_cache`, force a failure to see the friendly retry path, and POST `/api/recipes/generate` 11× to confirm the throttle 429.
 
-The only remaining Epic 3 work is **3.12 rate limiting** (10 gen/hr throttle on `api.recipes.generate` — its 429 can reuse the failed banner from 3.11). After that, **Epic 4.1** will replace the card's disabled «Приготовано» placeholder with the confirmation→deduction flow, and **5.3** will extend the favorite toggle to AJAX hearts on history/list pages. Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.
+Next is **Epic 4.1** — replace the card's disabled «Приготовано» placeholder with the confirmation→deduction flow (`PantryDeductionService`, atomic DB transaction, status→`cooked`). **5.3** later extends the favorite toggle to AJAX hearts on history/list pages. Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.

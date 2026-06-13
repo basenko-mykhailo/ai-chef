@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use Anthropic\Client;
 use App\Services\ClaudeService;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -39,5 +42,17 @@ class AppServiceProvider extends ServiceProvider
         if (str_starts_with((string) config('app.url'), 'https://')) {
             URL::forceScheme('https');
         }
+
+        // Тікет 3.12: 10 генерацій рецептів на годину на юзера (захист від
+        // bug-loop / випадкового спаму). Ключ — id юзера (маршрут під auth),
+        // IP як захисний фолбек. Дружнє українське 429-повідомлення підхоплює
+        // банер помилки з 3.11 (кнопка «Спробувати ще раз»).
+        RateLimiter::for('recipe-generation', function (Request $request) {
+            return Limit::perHour(10)
+                ->by((string) ($request->user()?->id ?: $request->ip()))
+                ->response(fn (Request $request, array $headers) => response()->json([
+                    'message' => 'Ви досягли ліміту — до 10 рецептів на годину. Спробуйте трохи пізніше.',
+                ], 429, $headers));
+        });
     }
 }
