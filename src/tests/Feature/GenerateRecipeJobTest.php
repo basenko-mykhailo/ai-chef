@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Enums\GenerationStatus;
 use App\Jobs\GenerateRecipeJob;
 use App\Models\Recipe;
+use App\Models\RecipeCache;
 use App\Models\User;
 use App\Services\ClaudeService;
+use App\Services\RecipeCacheKeyBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
 use Tests\TestCase;
@@ -85,5 +87,68 @@ class GenerateRecipeJobTest extends TestCase
         $recipe->refresh();
         $this->assertSame(GenerationStatus::Failed, $recipe->generation_status);
         $this->assertNotNull($recipe->generation_error);
+    }
+
+    public function test_cache_hit_fills_recipe_without_calling_claude(): void
+    {
+        // Cache pre-seeded for this recipe's snapshots → Claude must not be hit.
+        $this->mock(ClaudeService::class, function ($mock) {
+            $mock->shouldReceive('generateText')->never();
+        });
+
+        $recipe = $this->pendingRecipe();
+
+        $cacheKey = app(RecipeCacheKeyBuilder::class)->build(
+            $recipe->pantry_snapshot_json,
+            $recipe->selected_family_members_json,
+        );
+
+        RecipeCache::create([
+            'cache_key' => $cacheKey,
+            'model_used' => 'claude-haiku-4-5',
+            'response_json' => [
+                'name' => 'Кешований борщ',
+                'description' => 'З кешу',
+                'ingredients' => [['name' => 'Буряк', 'quantity' => 300, 'unit' => 'г', 'in_pantry' => true]],
+                'steps' => ['Зварити'],
+                'kbju' => ['kcal' => 200, 'protein' => 6, 'fat' => 4, 'carbs' => 30],
+                'servings' => 4,
+            ],
+        ]);
+
+        GenerateRecipeJob::dispatchSync($recipe);
+
+        $recipe->refresh();
+        $this->assertSame(GenerationStatus::Completed, $recipe->generation_status);
+        $this->assertSame('Кешований борщ', $recipe->name);
+        $this->assertSame(4, $recipe->servings);
+        // No new cache rows written on a hit.
+        $this->assertSame(1, RecipeCache::count());
+    }
+
+    public function test_cache_miss_stores_response_under_the_key(): void
+    {
+        $this->mock(ClaudeService::class, function ($mock) {
+            $mock->shouldReceive('generateText')->once()->andReturn(self::VALID_JSON);
+        });
+
+        $recipe = $this->pendingRecipe();
+
+        $cacheKey = app(RecipeCacheKeyBuilder::class)->build(
+            $recipe->pantry_snapshot_json,
+            $recipe->selected_family_members_json,
+        );
+
+        $this->assertDatabaseMissing('recipe_cache', ['cache_key' => $cacheKey]);
+
+        GenerateRecipeJob::dispatchSync($recipe);
+
+        $recipe->refresh();
+        $this->assertSame(GenerationStatus::Completed, $recipe->generation_status);
+        $this->assertDatabaseHas('recipe_cache', ['cache_key' => $cacheKey]);
+
+        $cached = RecipeCache::find($cacheKey);
+        $this->assertSame('Картопляне пюре', $cached->response_json['name']);
+        $this->assertSame('claude-haiku-4-5', $cached->model_used);
     }
 }

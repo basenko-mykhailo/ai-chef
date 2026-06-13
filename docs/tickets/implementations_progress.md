@@ -10,7 +10,7 @@
 | 0. Foundation | ✅ done | All 6 tickets implemented |
 | 1. Pantry (manual input) | ✅ done | data layer (1.1–1.4) + full CRUD UI (1.5–1.9): pantry page, add/edit/delete, autocomplete, custom-on-the-fly, validation |
 | 2. Family members | ✅ done | 2.1–2.4 + 2.5 delete (per-row button, confirmation, ownership guard) |
-| 3. AI Core (recipe generation) | 🟡 partial | 3.1–3.8 done (migrations, `ClaudeService`, prompts+schema, parser, generation page, endpoint+job); cache (3.9), recipe-card (3.10), error-handling (3.11), rate-limit (3.12) pending. 3.8 code complete but unverified (no runtime on host) |
+| 3. AI Core (recipe generation) | 🟡 partial | 3.1–3.9 done (migrations, `ClaudeService`, prompts+schema, parser, generation page, endpoint+job, cache); recipe-card (3.10), error-handling (3.11), rate-limit (3.12) pending. Full suite (124 tests) now runs green in the `php` container |
 | 4. "Cooked" → pantry deduction | ⬜ not started | Depends on Epic 1 + 3 |
 | 5. History & favorites | ⬜ not started | Route is a placeholder view |
 | 6. Photo pantry recognition | ⬜ not started | No upload UI or service |
@@ -85,7 +85,10 @@ Outstanding: none — Epic 2 complete.
 
 `app/Jobs/` now exists. Queue connection is `database` and the jobs table migration exists, so a `php artisan queue:listen` worker will process `GenerateRecipeJob`.
 
-Outstanding: 3.9 – 3.12.
+- ✅ **3.9 Логіка кешу** — `src/app/Services/RecipeCacheKeyBuilder.php` builds a deterministic `sha256` `cache_key` from the recipe's `pantry_snapshot_json` + `selected_family_members_json` (normalized: pantry `usort`ed by `[name, unit, quantity]`, members reduced to constraint-only tuples `{favorite/disliked/allergies_and_diets}` and `usort`ed — **member name excluded**, so identical-constraint members and reordered snapshots collapse to one key). `src/app/Models/RecipeCache.php` targets the existing `recipe_cache` table (string PK `cache_key`, `$incrementing=false`, `$timestamps=false` since there is no `updated_at` — `created_at` comes from the migration's `useCurrent()`, `response_json`→array cast). `GenerateRecipeJob::handle` now injects `RecipeCacheKeyBuilder`: it computes the key and `RecipeCache::find()`s **before** any Claude call — on a **hit** it fills the recipe from `response_json` and returns (no `ClaudeService`/prompt build); on a **miss** it generates as before, then `RecipeCache::create([...,'model_used'=>config('services.anthropic.default_model')])` and fills. The recipe-update block was extracted into a shared `private fillFromResponse(array $parsed)`. Tests: `tests/Unit/RecipeCacheKeyBuilderTest.php` (10 — determinism, pantry/member order-independence, sensitivity to qty/unit/name/constraint changes, name-excluded, empty-members stable key) + 2 cases in `tests/Feature/GenerateRecipeJobTest.php` (`test_cache_hit_fills_recipe_without_calling_claude` asserts `generateText` `->never()`; `test_cache_miss_stores_response_under_the_key` asserts the row is written with `model_used`). `vendor/bin/phpunit --filter='RecipeCacheKeyBuilderTest|GenerateRecipeJobTest'` → 15/15; full `composer test` → 124/124; `pint` clean. No new migration — `recipe_cache` table already shipped in 3.2. Spec: `docs/tickets/epic-3/task-9.md`.
+  - *Deviation from the literal plan wording* («sorted selected family member ids, their constraint hashes»): the 3.8 controller never snapshotted member ids, so the key hashes the **constraints themselves** — equivalent for recipe purposes and additionally dedups members that differ only by name.
+
+Outstanding: 3.10 – 3.12.
 
 ---
 
@@ -128,6 +131,6 @@ Outstanding: 6.1 – 6.6 (all).
 
 ## Recommended next step
 
-**First, verify 3.8 in the container** (it was coded but not run here — no Docker/PHP on this host): `docker compose exec php php artisan migrate` then `docker compose exec php composer test` (expect the 102 prior tests + 11 new ones green), and a live smoke with a real `ANTHROPIC_API_KEY` + `queue:listen` worker.
+3.1–3.9 are done and the full suite (124 tests) runs green in the `php` container, so the AI core's data + generation + cache path is complete (still worth a live smoke with a real `ANTHROPIC_API_KEY` + `queue:listen` worker to exercise a real Claude round-trip and confirm a second identical generation hits `recipe_cache`).
 
-Then the clear next move is **3.9 Логіка кешу** — hash `(sorted pantry items, sorted selected family member ids, their constraint hashes)`, look up `recipe_cache` **before** dispatching/calling Claude in `GenerateRecipeJob`, and store the response after a successful generation. **3.10 Картка рецепту** then replaces the minimal `recipes/show.blade.php` with the full card (КБЖУ block, «Приготовано» / «В обране» buttons). Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.
+The clear next move is **3.10 Картка рецепту** — replace the minimal `resources/views/recipes/show.blade.php` with the full card (ingredients flagged «є в коморі» / «треба купити», step list, КБЖУ block, «Приготовано» / «В обране» buttons). Then **3.11 error handling** (friendly retry on failed generation) and **3.12 rate limiting** (10 gen/hr throttle) close out Epic 3. Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.
