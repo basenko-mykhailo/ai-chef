@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\GenerationStatus;
+use App\Exceptions\InvalidRecipeResponseException;
 use App\Models\FamilyMember;
 use App\Models\Recipe;
 use App\Models\RecipeCache;
@@ -34,6 +35,17 @@ class GenerateRecipeJob implements ShouldQueue
 
     /** Above ClaudeService's 120s API timeout so the worker doesn't kill us early. */
     public int $timeout = 180;
+
+    /**
+     * Friendly, cause-specific помилки генерації (тікет 3.11). Зберігаються в
+     * `recipes.generation_error` і показуються користувачу як є — без технічних
+     * деталей (ті йдуть лише в Log::error).
+     */
+    private const ERROR_INVALID_RESPONSE = 'AI повернув некоректну відповідь. Спробуйте ще раз.';
+
+    private const ERROR_SERVICE_UNAVAILABLE = 'Сервіс генерації тимчасово недоступний. Спробуйте ще раз за хвилину.';
+
+    private const ERROR_TIMEOUT = 'Генерація зайняла забагато часу. Спробуйте ще раз.';
 
     public function __construct(public Recipe $recipe) {}
 
@@ -91,14 +103,27 @@ class GenerateRecipeJob implements ShouldQueue
         } catch (Throwable $e) {
             // Covers API failures (timeouts / rate limits → AnthropicException)
             // and unparseable JSON (InvalidRecipeResponseException after retry).
+            // Технічні деталі лишаються в логах; користувач бачить лише friendly-текст.
             Log::error('Recipe generation failed', [
                 'recipe_id' => $this->recipe->id,
                 'exception' => $e::class,
                 'message' => $e->getMessage(),
             ]);
 
-            $this->markFailed();
+            $this->markFailed($this->friendlyMessage($e));
         }
+    }
+
+    /**
+     * Мапить причину збою на friendly-повідомлення. Невалідна відповідь моделі —
+     * окремий текст; усе інше (API/мережа/rate-limit/SDK-timeout) трактуємо як
+     * тимчасову недоступність сервісу.
+     */
+    private function friendlyMessage(Throwable $e): string
+    {
+        return $e instanceof InvalidRecipeResponseException
+            ? self::ERROR_INVALID_RESPONSE
+            : self::ERROR_SERVICE_UNAVAILABLE;
     }
 
     /**
@@ -123,18 +148,19 @@ class GenerateRecipeJob implements ShouldQueue
 
     /**
      * Safety net: fires when the worker kills the job (timeout / max tries)
-     * before the in-handle catch could persist the failed state.
+     * before the in-handle catch could persist the failed state — handle()
+     * swallows its own Throwable, тож сюди доходить лише worker-timeout/fatal.
      */
     public function failed(Throwable $e): void
     {
-        $this->markFailed();
+        $this->markFailed(self::ERROR_TIMEOUT);
     }
 
-    private function markFailed(): void
+    private function markFailed(string $message): void
     {
         $this->recipe->update([
             'generation_status' => GenerationStatus::Failed,
-            'generation_error' => 'Не вдалося згенерувати рецепт. Спробуйте ще раз.',
+            'generation_error' => $message,
         ]);
     }
 }

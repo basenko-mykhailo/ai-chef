@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\GenerationStatus;
 use App\Models\Recipe;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -66,6 +67,23 @@ class RecipeShowTest extends TestCase
             ->assertOk()
             ->assertSee('Рецепт ще не готовий.')
             ->assertDontSee('Інгредієнти');
+    }
+
+    public function test_failed_recipe_shows_error_and_retry_button(): void
+    {
+        $user = User::factory()->create();
+        $recipe = Recipe::factory()->for($user)->create([
+            'generation_status' => GenerationStatus::Failed,
+            'generation_error' => 'Сервіс генерації тимчасово недоступний. Спробуйте ще раз за хвилину.',
+        ]);
+
+        $this->actingAs($user)->get(route('recipes.show', $recipe))
+            ->assertOk()
+            ->assertSee('Не вдалося згенерувати рецепт.')                  // failed-state heading
+            ->assertSee('Сервіс генерації тимчасово недоступний. Спробуйте ще раз за хвилину.') // friendly error
+            ->assertSee('Спробувати ще раз')                               // retry button
+            ->assertSee(route('recipes.create'), false)                    // retry links to a fresh generation
+            ->assertDontSee('Інгредієнти');                                // not the card
     }
 
     public function test_owner_can_toggle_favorite(): void

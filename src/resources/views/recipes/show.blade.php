@@ -15,14 +15,20 @@
 
     <div class="py-10">
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
-            @if ($recipe->generation_status !== \App\Enums\GenerationStatus::Completed)
+            @if ($recipe->generation_status === \App\Enums\GenerationStatus::Failed)
+                {{-- Friendly error генерації (тікет 3.11) з явним retry → нова генерація. --}}
+                <div class="rounded-xl border border-red-300 bg-red-50 px-5 py-6 text-red-800">
+                    <p class="font-medium">Не вдалося згенерувати рецепт.</p>
+                    <p class="mt-1 text-sm">{{ $recipe->generation_error ?? 'Сталася помилка під час генерації.' }}</p>
+                    <a href="{{ route('recipes.create') }}"
+                       class="mt-4 inline-flex items-center px-5 py-2.5 bg-brand text-cream font-semibold rounded-xl shadow-sm hover:opacity-90 transition">
+                        Спробувати ще раз
+                    </a>
+                </div>
+            @elseif ($recipe->generation_status !== \App\Enums\GenerationStatus::Completed)
                 <div class="rounded-xl border border-amber-300 bg-amber-50 px-5 py-6 text-amber-800">
                     <p class="font-medium">Рецепт ще не готовий.</p>
                     <p class="mt-1 text-sm">Статус: {{ $recipe->generation_status->label() }}.</p>
-                    @if ($recipe->generation_error)
-                        <p class="mt-2 text-sm">{{ $recipe->generation_error }}</p>
-                        <a href="{{ route('recipes.create') }}" class="mt-3 inline-block text-brand font-medium hover:underline">Спробувати ще раз</a>
-                    @endif
                 </div>
             @else
                 @if (session('recipe-favorite-flash'))
