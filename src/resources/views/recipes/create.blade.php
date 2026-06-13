@@ -1,14 +1,14 @@
 <x-app-layout>
     <x-slot name="header">
         <div>
-            <h2 class="font-semibold text-xl text-ink leading-tight">Згенерувати рецепт</h2>
-            <p class="text-sm text-muted">Оберіть, для кого готуємо, і AI підбере рецепт із ваших запасів</p>
+            <h2 class="font-display text-3xl font-bold uppercase leading-none text-brand">Згенерувати рецепт</h2>
+            <p class="mt-1 text-sm font-medium text-brand-accent">Оберіть, для кого готуємо, і AI підбере рецепт із ваших запасів</p>
         </div>
     </x-slot>
 
     <style>[x-cloak]{display:none!important}</style>
 
-    <div class="py-10"
+    <div class="py-8"
          x-data="{
             generating: false,
             failed: false,
@@ -77,12 +77,12 @@
                 this.$root.querySelector('form').requestSubmit();
             },
          }">
-        <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-md mx-auto px-4">
             <div x-show="failed" x-cloak
-                 class="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
+                 class="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
                 <p x-text="errorMessage"></p>
                 <button type="button" x-on:click="retry()"
-                        class="mt-3 inline-flex items-center px-4 py-2 bg-brand text-cream text-sm font-semibold rounded-md hover:opacity-90 transition">
+                        class="mt-3 inline-flex items-center px-4 py-2 bg-brand text-cream text-sm font-semibold rounded-lg hover:opacity-90 transition">
                     Спробувати ще раз
                 </button>
             </div>
@@ -91,7 +91,7 @@
                 @csrf
 
                 {{-- Хто буде їсти --}}
-                <div class="bg-cream border border-beige rounded-xl overflow-hidden shadow-sm">
+                <div class="bg-cream border border-beige rounded-2xl overflow-hidden shadow-sm">
                     <div class="px-5 py-3 bg-brand text-cream font-medium flex items-center justify-between">
                         <span>Для кого готуємо</span>
                         @if ($members->isNotEmpty())
@@ -111,10 +111,10 @@
                     @else
                         <ul class="divide-y divide-beige">
                             @foreach ($members as $member)
-                                <li class="px-5 py-3 bg-white/50">
+                                <li class="px-5 py-3">
                                     <label class="flex items-start gap-3 cursor-pointer">
                                         <input type="checkbox" name="members[]" value="{{ $member->id }}" checked
-                                               class="mt-1 rounded border-beige text-brand focus:ring-brand">
+                                               class="mt-1 rounded border-beige text-brand-accent focus:ring-brand">
                                         <span class="min-w-0">
                                             <span class="block font-medium text-ink">{{ $member->name }}</span>
                                             @if ($member->allergies_and_diets)
@@ -138,7 +138,7 @@
                 </div>
 
                 {{-- Поточна комора --}}
-                <div class="mt-6 bg-cream border border-beige rounded-xl overflow-hidden shadow-sm">
+                <div class="mt-6 bg-cream border border-beige rounded-2xl overflow-hidden shadow-sm">
                     <div class="px-5 py-3 bg-brand text-cream font-medium flex items-center justify-between">
                         <span>Ваша комора</span>
                         <span class="text-sm opacity-80">{{ $pantry->count() }} поз.</span>
@@ -149,16 +149,16 @@
                             <p class="text-ink font-medium">Комора порожня.</p>
                             <p class="mt-1 text-sm text-muted">Додайте продукти — без них AI не зможе скласти рецепт.</p>
                             <a href="{{ route('pantry.create') }}"
-                               class="mt-4 inline-flex items-center px-4 py-2 bg-brand text-white text-sm font-semibold rounded-md hover:opacity-90 transition">
-                                + Додати продукт
+                               class="mt-4 inline-flex items-center gap-1 rounded-lg bg-brand-accent px-4 py-2 text-sm font-semibold text-ink shadow-sm transition hover:bg-brand-accent-light">
+                                <span class="text-lg leading-none">+</span> Додати продукт
                             </a>
                         </div>
                     @else
                         <ul class="divide-y divide-beige">
                             @foreach ($pantry as $item)
-                                <li class="px-5 py-2.5 flex items-center justify-between gap-4 bg-white/50">
+                                <li class="px-5 py-2.5 flex items-center justify-between gap-4">
                                     <span class="min-w-0 font-medium text-ink truncate">{{ $item->ingredient?->name ?? '—' }}</span>
-                                    <span class="shrink-0 text-ink font-semibold">{{ rtrim(rtrim((string) $item->quantity, '0'), '.') }}<span class="ml-1 text-muted font-normal">{{ $item->unit->label() }}</span></span>
+                                    <span class="shrink-0 text-brand font-semibold">{{ rtrim(rtrim((string) $item->quantity, '0'), '.') }}<span class="ml-1 text-muted font-normal">{{ $item->unit->label() }}</span></span>
                                 </li>
                             @endforeach
                         </ul>
@@ -169,12 +169,12 @@
                 <div class="mt-8 text-center">
                     @if ($pantry->isEmpty())
                         <button type="submit" disabled
-                                class="inline-flex items-center justify-center px-8 py-4 bg-beige text-muted text-lg font-semibold rounded-xl cursor-not-allowed">
+                                class="inline-flex w-full items-center justify-center px-8 py-4 bg-beige text-muted text-lg font-semibold rounded-xl cursor-not-allowed">
                             🍳 Згенерувати рецепт
                         </button>
                     @else
                         <button type="submit" x-bind:disabled="generating"
-                                class="inline-flex items-center justify-center px-8 py-4 bg-brand text-white text-lg font-semibold rounded-xl shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 transition disabled:opacity-60">
+                                class="inline-flex w-full items-center justify-center px-8 py-4 bg-brand-accent text-ink text-lg font-semibold rounded-xl shadow-sm hover:bg-brand-accent-light focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 focus:ring-offset-sand transition disabled:opacity-60">
                             🍳 Згенерувати рецепт
                         </button>
                     @endif
