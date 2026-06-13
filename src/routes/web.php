@@ -35,6 +35,7 @@ Route::middleware('auth')->group(function () {
     Route::view('/recipes', 'placeholder', ['title' => 'Рецепти'])->name('recipes.index');
     Route::get('/recipes/create', [RecipeController::class, 'create'])->name('recipes.create');
     Route::get('/recipes/{recipe}', [RecipeController::class, 'show'])->name('recipes.show');
+    Route::get('/recipes/{recipe}/cook', [RecipeController::class, 'confirmCook'])->name('recipes.cook.confirm');
     Route::patch('/recipes/{recipe}/favorite', [RecipeController::class, 'toggleFavorite'])->name('recipes.favorite');
     Route::post('/api/recipes/generate', [RecipeController::class, 'generate'])
         ->middleware('throttle:recipe-generation')

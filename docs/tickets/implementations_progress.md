@@ -11,7 +11,7 @@
 | 1. Pantry (manual input) | ✅ done | data layer (1.1–1.4) + full CRUD UI (1.5–1.9): pantry page, add/edit/delete, autocomplete, custom-on-the-fly, validation |
 | 2. Family members | ✅ done | 2.1–2.4 + 2.5 delete (per-row button, confirmation, ownership guard) |
 | 3. AI Core (recipe generation) | ✅ done | 3.1–3.12 done (migrations, `ClaudeService`, prompts+schema, parser, generation page, endpoint+job, cache, recipe card, error handling, rate limit). Full suite (138 tests) runs green in the `php` container |
-| 4. "Cooked" → pantry deduction | ⬜ not started | Depends on Epic 1 + 3 |
+| 4. "Cooked" → pantry deduction | 🟡 partial | 4.1 done (cook button → confirmation stub); 4.2–4.4 pending |
 | 5. History & favorites | ⬜ not started | Route is a placeholder view |
 | 6. Photo pantry recognition | ⬜ not started | No upload UI or service |
 | 7. Polish & deploy | 🟡 partial | Disclaimer in layout (overlaps with 0.6); rest pending |
@@ -98,11 +98,11 @@ Outstanding: none — Epic 3 complete.
 
 ---
 
-## Epic 4 — "Cooked" → pantry deduction ⬜
+## Epic 4 — "Cooked" → pantry deduction 🟡
 
-Nothing implemented. Blocked on Epic 1 (pantry tables) and Epic 3 (recipes table).
+- ✅ **4.1 Кнопка "Приготовано" на картці рецепту** — the card's disabled «Приготовано» placeholder is now an **active** link. New route `GET /recipes/{recipe}/cook` (`recipes.cook.confirm`) in `routes/web.php` → `RecipeController@confirmCook` (ownership-guarded `abort_unless … 403`), rendering a minimal confirmation stub `resources/views/recipes/cook.blade.php` (recipe name + «Підтвердження списання — незабаром» note + «Назад до рецепту»). `resources/views/recipes/show.blade.php` swaps the `bg-brand/60` disabled button for an `<a href="{{ route('recipes.cook.confirm', $recipe) }}">` (only in the `completed`, non-`cooked` branch); the `cooked` branch keeps its disabled «Вже приготовано» state. Navigation is read-only — no pantry/`status` mutation (that's 4.2–4.4). Test `tests/Feature/RecipeCookConfirmTest.php` (6 — owner stub render, no-deduction/status-unchanged, non-owner 403, guest redirect, completed card links + drops old caption, cooked-state has no confirm link). `composer test` → 144/144; `pint` clean; `route:list --name=recipes.cook` confirms the route. Spec: `docs/tickets/epic-4/task-1.md`.
 
-Outstanding: 4.1 – 4.4 (all).
+Outstanding: 4.2 (confirmation page with editable ingredient list), 4.3 (`PantryDeductionService`, atomic deduction), 4.4 (recipe `status='cooked'` + `cooked_at`).
 
 ---
 
@@ -139,4 +139,4 @@ Outstanding: 6.1 – 6.6 (all).
 
 **Epic 3 is complete** (3.1–3.12) and the full suite (138 tests) runs green in the `php` container — the AI core's data + generation + cache path, the result card, friendly error handling (cause-specific message + «Спробувати ще раз»), **and** the 10 gen/hr rate limit are all in. Still worth a live smoke with a real `ANTHROPIC_API_KEY` + `queue:listen` worker to exercise a real Claude round-trip, confirm a second identical generation hits `recipe_cache`, force a failure to see the friendly retry path, and POST `/api/recipes/generate` 11× to confirm the throttle 429.
 
-Next is **Epic 4.1** — replace the card's disabled «Приготовано» placeholder with the confirmation→deduction flow (`PantryDeductionService`, atomic DB transaction, status→`cooked`). **5.3** later extends the favorite toggle to AJAX hearts on history/list pages. Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.
+**Epic 4.1 is done** — the «Приготовано» button now routes to a confirmation stub (no deduction yet). Next is **Epic 4.2** — flesh out `recipes/cook.blade.php` into the real confirmation page: list the recipe's ingredients that exist in the pantry (matched by `name + unit`), with editable quantity fields pre-filled from the recipe. Then **4.3** (`PantryDeductionService`, atomic DB transaction, delete rows ≤ 0) and **4.4** (recipe `status='cooked'` + `cooked_at` + "комору оновлено" redirect). **5.3** later extends the favorite toggle to AJAX hearts on history/list pages. Still worth flipping `APP_LOCALE=en` → `uk` in `src/.env` before deeper UI work.

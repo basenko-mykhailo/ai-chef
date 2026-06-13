@@ -92,20 +92,18 @@
 
                 {{-- Панель дій --}}
                 <div class="mt-8 flex flex-col sm:flex-row gap-3">
-                    {{-- «Приготовано»: повний флоу (підтвердження → списання комори) — тікет 4.1. --}}
+                    {{-- «Приготовано» (тікет 4.1): веде на сторінку підтвердження списання,
+                         нічого не списує одразу. Список + списання комори — тікети 4.2–4.4. --}}
                     @if ($recipe->status === 'cooked')
                         <button type="button" disabled
                                 class="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-beige text-muted font-semibold rounded-xl cursor-not-allowed">
                             🍳 Вже приготовано
                         </button>
                     @else
-                        <div class="flex-1">
-                            <button type="button" disabled title="Списання комори буде доступне незабаром"
-                                    class="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-brand/60 text-white font-semibold rounded-xl cursor-not-allowed">
-                                🍳 Приготовано
-                            </button>
-                            <p class="mt-1 text-center text-xs text-muted">Списання комори — незабаром</p>
-                        </div>
+                        <a href="{{ route('recipes.cook.confirm', $recipe) }}"
+                           class="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-brand text-cream font-semibold rounded-xl shadow-sm hover:opacity-90 transition">
+                            🍳 Приготовано
+                        </a>
                     @endif
 
                     {{-- «В обране»: мінімальний тогл (тікет 3.10); AJAX-серце в історії — тікет 5.3. --}}
