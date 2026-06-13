@@ -14,8 +14,8 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased">
-        <div class="min-h-screen flex flex-col bg-gray-100">
+    <body class="font-sans antialiased text-ink">
+        <div class="min-h-screen flex flex-col bg-sand">
             @include('layouts.navigation')
 
             <!-- AI safety disclaimer — non-negotiable per product/safety requirement -->
@@ -32,7 +32,7 @@
 
             <!-- Page Heading -->
             @isset($header)
-                <header class="bg-white shadow">
+                <header class="bg-cream border-b border-beige">
                     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>
@@ -45,12 +45,12 @@
             </main>
 
             <!-- Footer -->
-            <footer class="bg-white border-t border-gray-200 mt-auto">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-500">
+            <footer class="bg-cream border-t border-beige mt-auto">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-muted">
                     <div>
                         &copy; {{ date('Y') }} {{ config('app.name', 'AI Chef') }}
                     </div>
-                    <div class="text-gray-400">
+                    <div class="text-muted/70">
                         Зроблено для хакатону · PHP · Laravel · Claude API
                     </div>
                 </div>
