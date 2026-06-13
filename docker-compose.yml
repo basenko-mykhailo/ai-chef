@@ -68,7 +68,7 @@ services:
       - ai_chive
 
   db:
-    image: postgres:latest
+    image: postgres:17
     container_name: ai_chive_db
     restart: unless-stopped
     environment:
@@ -76,7 +76,11 @@ services:
       POSTGRES_USER: ai_chive
       POSTGRES_PASSWORD: secret
     volumes:
-      - pgdata:/var/lib/postgresql
+      # Postgres 17 stores its cluster in /var/lib/postgresql/data (the image's
+      # declared VOLUME). Mounting the named volume at the parent dir leaves the
+      # real data in a throwaway anonymous volume that is lost on container
+      # recreation — mount the data dir itself so pgdata actually persists.
+      - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
