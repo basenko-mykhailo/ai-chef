@@ -9,8 +9,15 @@ export default defineConfig({
             input: ['resources/css/app.css', 'resources/js/app.js'],
             refresh: true,
             fonts: [
-                bunny('Figtree', {
-                    weights: [400, 500, 600],
+                // Figma design system: Inter (UI), Oswald (display), Playfair Display SC (wordmark)
+                bunny('Inter', {
+                    weights: [400, 500, 600, 700],
+                }),
+                bunny('Oswald', {
+                    weights: [500, 600, 700],
+                }),
+                bunny('Playfair Display SC', {
+                    weights: [400],
                 }),
             ],
         }),
