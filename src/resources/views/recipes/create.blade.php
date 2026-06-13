@@ -69,11 +69,22 @@
                 this.failed = true;
                 this.errorMessage = message;
             },
+
+            retry() {
+                this.failed = false;
+                this.errorMessage = '';
+                // Повторно сабмітимо форму → той самий submit.prevent='start' → нова генерація.
+                this.$root.querySelector('form').requestSubmit();
+            },
          }">
         <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
             <div x-show="failed" x-cloak
                  class="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
-                <span x-text="errorMessage"></span>
+                <p x-text="errorMessage"></p>
+                <button type="button" x-on:click="retry()"
+                        class="mt-3 inline-flex items-center px-4 py-2 bg-brand text-cream text-sm font-semibold rounded-md hover:opacity-90 transition">
+                    Спробувати ще раз
+                </button>
             </div>
 
             <form method="post" action="{{ route('api.recipes.generate') }}" x-on:submit.prevent="start($event)">

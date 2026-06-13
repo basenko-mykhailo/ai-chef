@@ -82,4 +82,17 @@ class RecipeGenerationPageTest extends TestCase
         $response->assertSee('без додаткових обмежень');
         $response->assertDontSee('cursor-not-allowed', false); // button is active
     }
+
+    public function test_page_renders_retry_button_in_failed_banner(): void
+    {
+        // The «Спробувати ще раз» control is Blade-rendered inside the Alpine
+        // failed banner (hidden via x-show until a generation fails) — тікет 3.11.
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/recipes/create');
+
+        $response->assertOk();
+        $response->assertSee('Спробувати ще раз');
+        $response->assertSee('x-on:click="retry()"', false);
+    }
 }

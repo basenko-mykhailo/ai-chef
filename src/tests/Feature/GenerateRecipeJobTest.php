@@ -69,7 +69,12 @@ class GenerateRecipeJobTest extends TestCase
 
         $recipe->refresh();
         $this->assertSame(GenerationStatus::Failed, $recipe->generation_status);
-        $this->assertNotNull($recipe->generation_error);
+        // Friendly «service unavailable» text — and no technical detail leaks through.
+        $this->assertSame(
+            'Сервіс генерації тимчасово недоступний. Спробуйте ще раз за хвилину.',
+            $recipe->generation_error,
+        );
+        $this->assertStringNotContainsString('API timeout', (string) $recipe->generation_error);
         $this->assertEmpty($recipe->name); // never populated — stays the '' placeholder
     }
 
@@ -86,7 +91,22 @@ class GenerateRecipeJobTest extends TestCase
 
         $recipe->refresh();
         $this->assertSame(GenerationStatus::Failed, $recipe->generation_status);
-        $this->assertNotNull($recipe->generation_error);
+        // Friendly «invalid response» text — not the parser's technical message.
+        $this->assertSame('AI повернув некоректну відповідь. Спробуйте ще раз.', $recipe->generation_error);
+        $this->assertStringNotContainsString('Invalid recipe response', (string) $recipe->generation_error);
+    }
+
+    public function test_worker_timeout_failed_hook_sets_timeout_message(): void
+    {
+        // The failed() hook fires when the worker kills the job (timeout / fatal)
+        // before the in-handle catch can run — it must persist the timeout text.
+        $recipe = $this->pendingRecipe();
+
+        (new GenerateRecipeJob($recipe))->failed(new RuntimeException('job timed out'));
+
+        $recipe->refresh();
+        $this->assertSame(GenerationStatus::Failed, $recipe->generation_status);
+        $this->assertSame('Генерація зайняла забагато часу. Спробуйте ще раз.', $recipe->generation_error);
     }
 
     public function test_cache_hit_fills_recipe_without_calling_claude(): void
