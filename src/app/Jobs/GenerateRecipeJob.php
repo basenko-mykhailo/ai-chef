@@ -5,7 +5,9 @@ namespace App\Jobs;
 use App\Enums\GenerationStatus;
 use App\Models\FamilyMember;
 use App\Models\Recipe;
+use App\Models\RecipeCache;
 use App\Services\ClaudeService;
+use App\Services\RecipeCacheKeyBuilder;
 use App\Services\RecipePromptBuilder;
 use App\Services\RecipeResponseParser;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -35,11 +37,28 @@ class GenerateRecipeJob implements ShouldQueue
 
     public function __construct(public Recipe $recipe) {}
 
-    public function handle(ClaudeService $claude, RecipePromptBuilder $builder, RecipeResponseParser $parser): void
-    {
+    public function handle(
+        ClaudeService $claude,
+        RecipePromptBuilder $builder,
+        RecipeResponseParser $parser,
+        RecipeCacheKeyBuilder $keyBuilder,
+    ): void {
         $this->recipe->update(['generation_status' => GenerationStatus::Processing]);
 
         try {
+            // Кеш (тікет 3.9): ключ від комбінації комори + обмежень. Дивимось
+            // ДО будь-якого виклику Claude — hit повністю оминає платний запит.
+            $cacheKey = $keyBuilder->build(
+                $this->recipe->pantry_snapshot_json ?? [],
+                $this->recipe->selected_family_members_json ?? [],
+            );
+
+            if ($cached = RecipeCache::find($cacheKey)) {
+                $this->fillFromResponse($cached->response_json);
+
+                return;
+            }
+
             // Rebuild lightweight members from the snapshot taken at submit time —
             // robust even if a FamilyMember was deleted before the job ran.
             $members = array_map(
@@ -60,16 +79,15 @@ class GenerateRecipeJob implements ShouldQueue
                 ),
             );
 
-            $this->recipe->update([
-                'name' => $parsed['name'],
-                'description' => $parsed['description'],
-                'ingredients_json' => $parsed['ingredients'],
-                'steps_json' => $parsed['steps'],
-                'kbju_json' => $parsed['kbju'],
-                'servings' => $parsed['servings'],
-                'generation_status' => GenerationStatus::Completed,
-                'generation_error' => null,
+            // Зберігаємо після успіху, щоб наступна ідентична комбінація
+            // взяла відповідь з кешу.
+            RecipeCache::create([
+                'cache_key' => $cacheKey,
+                'response_json' => $parsed,
+                'model_used' => config('services.anthropic.default_model'),
             ]);
+
+            $this->fillFromResponse($parsed);
         } catch (Throwable $e) {
             // Covers API failures (timeouts / rate limits → AnthropicException)
             // and unparseable JSON (InvalidRecipeResponseException after retry).
@@ -81,6 +99,26 @@ class GenerateRecipeJob implements ShouldQueue
 
             $this->markFailed();
         }
+    }
+
+    /**
+     * Заповнює рецепт парсованою відповіддю й ставить `completed`. Спільний
+     * шлях для cache-hit і свіжої генерації.
+     *
+     * @param  array{name: string, description: string, ingredients: array, steps: array, kbju: array, servings: int}  $parsed
+     */
+    private function fillFromResponse(array $parsed): void
+    {
+        $this->recipe->update([
+            'name' => $parsed['name'],
+            'description' => $parsed['description'],
+            'ingredients_json' => $parsed['ingredients'],
+            'steps_json' => $parsed['steps'],
+            'kbju_json' => $parsed['kbju'],
+            'servings' => $parsed['servings'],
+            'generation_status' => GenerationStatus::Completed,
+            'generation_error' => null,
+        ]);
     }
 
     /**
