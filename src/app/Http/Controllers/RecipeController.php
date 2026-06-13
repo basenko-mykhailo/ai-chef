@@ -8,6 +8,7 @@ use App\Jobs\GenerateRecipeJob;
 use App\Models\PantryItem;
 use App\Models\Recipe;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -131,5 +132,22 @@ class RecipeController extends Controller
         abort_unless($recipe->user_id === $request->user()->id, 403);
 
         return view('recipes.show', ['recipe' => $recipe]);
+    }
+
+    /**
+     * Тогл «В обране» з картки рецепту (тікет 3.10): перемикає `is_favorite`
+     * і повертає назад із flash. Тікет 5.3 розширить це на AJAX-серце в
+     * історії/списках.
+     */
+    public function toggleFavorite(Request $request, Recipe $recipe): RedirectResponse
+    {
+        abort_unless($recipe->user_id === $request->user()->id, 403);
+
+        $recipe->update(['is_favorite' => ! $recipe->is_favorite]);
+
+        return back()->with(
+            'recipe-favorite-flash',
+            $recipe->is_favorite ? 'Додано в обране.' : 'Прибрано з обраного.',
+        );
     }
 }
