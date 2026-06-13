@@ -38,6 +38,35 @@ services:
     networks:
       - ai_chive
 
+  queue:
+    build:
+      context: ./docker/php
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    image: ai_chive/php:8.4-fpm
+    container_name: ai_chive_queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    # queue:listen (not queue:work) reboots the framework per job so bind-mounted
+    # code changes are picked up without restarting the worker. --timeout=0 lets the
+    # long-running Claude call finish; GenerateRecipeJob enforces its own 180s timeout.
+    command: php artisan queue:listen --tries=1 --timeout=0
+    volumes:
+      - ./src:/var/www/html
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ai_chive
+      DB_USERNAME: ai_chive
+      DB_PASSWORD: secret
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ai_chive
+
   db:
     image: postgres:latest
     container_name: ai_chive_db
