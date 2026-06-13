@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Ingredient;
 use App\Models\PantryItem;
 use App\Models\Recipe;
 use App\Models\User;
@@ -12,38 +13,101 @@ class RecipeCookConfirmTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_owner_sees_confirmation_stub(): void
+    /**
+     * The `completed()` recipe factory ships «Картопля» 500 г (in_pantry:true)
+     * and «Сіль» 1 ч.л. (in_pantry:false) — used across the matching cases below.
+     */
+    private function potatoPantryItem(User $user, float $quantity, string $unit): PantryItem
+    {
+        $potato = Ingredient::factory()->create(['name' => 'Картопля']);
+
+        return PantryItem::factory()->for($user)->create([
+            'ingredient_id' => $potato->id,
+            'quantity' => $quantity,
+            'unit' => $unit,
+        ]);
+    }
+
+    public function test_owner_sees_matched_ingredient_with_prefilled_quantity(): void
+    {
+        $user = User::factory()->create();
+        $recipe = Recipe::factory()->for($user)->completed()->create();
+        $this->potatoPantryItem($user, 800, 'g'); // label «г» matches the recipe unit
+
+        $this->actingAs($user)->get(route('recipes.cook.confirm', $recipe))
+            ->assertOk()
+            ->assertSee('Картопля')
+            ->assertSee('value="500"', false)                          // pre-filled from the recipe
+            ->assertSee('у коморі: 800 г')                             // live pantry hint
+            ->assertSee(route('recipes.cook.store', $recipe), false)   // editable form is present
+            ->assertDontSee('Сіль');                                  // in_pantry:false staple excluded
+    }
+
+    public function test_unit_mismatch_excludes_ingredient(): void
+    {
+        $user = User::factory()->create();
+        $recipe = Recipe::factory()->for($user)->completed()->create();
+        $this->potatoPantryItem($user, 5, 'kg'); // label «кг» ≠ recipe «г»
+
+        $this->actingAs($user)->get(route('recipes.cook.confirm', $recipe))
+            ->assertOk()
+            ->assertSee('Нема чого списувати.')
+            ->assertDontSee(route('recipes.cook.store', $recipe), false); // no submit form
+    }
+
+    public function test_no_matching_pantry_shows_empty_state_without_form(): void
     {
         $user = User::factory()->create();
         $recipe = Recipe::factory()->for($user)->completed()->create();
 
         $this->actingAs($user)->get(route('recipes.cook.confirm', $recipe))
             ->assertOk()
-            ->assertSee('Підтвердження списання — незабаром.')
-            ->assertSee(route('recipes.show', $recipe), false); // «Назад до рецепту»
+            ->assertSee('Нема чого списувати.')
+            ->assertDontSee(route('recipes.cook.store', $recipe), false);
     }
 
-    public function test_confirmation_does_not_deduct_pantry_or_change_status(): void
+    public function test_viewing_confirmation_does_not_deduct_pantry_or_change_status(): void
     {
         $user = User::factory()->create();
         $recipe = Recipe::factory()->for($user)->completed()->create();
-        PantryItem::factory()->count(3)->for($user)->create();
+        $this->potatoPantryItem($user, 800, 'g');
 
         $this->actingAs($user)->get(route('recipes.cook.confirm', $recipe))
             ->assertOk();
 
-        $this->assertSame(3, PantryItem::where('user_id', $user->id)->count());
+        $this->assertSame(1, PantryItem::where('user_id', $user->id)->count());
         $this->assertSame('generated', $recipe->fresh()->status);
         $this->assertNull($recipe->fresh()->cooked_at);
     }
 
-    public function test_non_owner_is_forbidden(): void
+    public function test_cook_post_is_a_stub_that_mutates_nothing(): void
+    {
+        $user = User::factory()->create();
+        $recipe = Recipe::factory()->for($user)->completed()->create();
+        $pantryItem = $this->potatoPantryItem($user, 800, 'g');
+
+        $this->actingAs($user)->post(route('recipes.cook.store', $recipe), [
+            'items' => [
+                $pantryItem->id => ['pantry_item_id' => $pantryItem->id, 'quantity' => 500],
+            ],
+        ])->assertRedirect(route('recipes.show', $recipe));
+
+        $this->assertSame('800.000', $pantryItem->fresh()->quantity); // unchanged (deduction is 4.3)
+        $this->assertSame(1, PantryItem::where('user_id', $user->id)->count());
+        $this->assertSame('generated', $recipe->fresh()->status);     // status flip is 4.4
+        $this->assertNull($recipe->fresh()->cooked_at);
+    }
+
+    public function test_non_owner_is_forbidden_on_confirm_and_store(): void
     {
         $owner = User::factory()->create();
         $other = User::factory()->create();
         $recipe = Recipe::factory()->for($owner)->completed()->create();
 
         $this->actingAs($other)->get(route('recipes.cook.confirm', $recipe))
+            ->assertForbidden();
+
+        $this->actingAs($other)->post(route('recipes.cook.store', $recipe))
             ->assertForbidden();
     }
 
@@ -52,6 +116,9 @@ class RecipeCookConfirmTest extends TestCase
         $recipe = Recipe::factory()->completed()->create();
 
         $this->get(route('recipes.cook.confirm', $recipe))
+            ->assertRedirect(route('login'));
+
+        $this->post(route('recipes.cook.store', $recipe))
             ->assertRedirect(route('login'));
     }
 
