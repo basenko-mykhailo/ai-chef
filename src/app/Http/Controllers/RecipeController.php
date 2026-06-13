@@ -135,16 +135,73 @@ class RecipeController extends Controller
     }
 
     /**
-     * Сторінка підтвердження списання (тікет 4.1): кнопка «Приготовано» з картки
-     * веде сюди — нічого не списує і не змінює статус рецепту. Тікет 4.2 наповнить
-     * сторінку списком інгредієнтів із редагованими кількостями, 4.3 додасть
-     * атомарне списання комори, 4.4 — перехід статусу рецепту в `cooked`.
+     * Сторінка підтвердження списання (тікет 4.2): показує інгредієнти рецепту,
+     * що є в поточній коморі (збіг за назвою + одиницею), із редагованими
+     * кількостями (передзаповнені сумами з рецепту). Нічого не списує і не змінює
+     * статус — атомарне списання комори додасть 4.3, перехід статусу в `cooked` — 4.4.
      */
     public function confirmCook(Request $request, Recipe $recipe): View
     {
         abort_unless($recipe->user_id === $request->user()->id, 403);
 
-        return view('recipes.cook', ['recipe' => $recipe]);
+        // Поточна комора → лукап за «назва|одиниця». Зіставляємо з живою коморою
+        // (не зі снапшотом), бо списувати 4.3 буде саме з неї.
+        $pantryByKey = $request->user()->pantryItems()
+            ->with('ingredient')
+            ->get()
+            ->keyBy(fn (PantryItem $item) => $this->cookMatchKey(
+                (string) $item->ingredient?->name,
+                $item->unit->label(),
+            ));
+
+        // Інгредієнти рецепту, що є в коморі. Стейпли (`in_pantry:false`) і незбіги
+        // за назвою/одиницею тут просто не зіставляться (немає конвертації одиниць).
+        $matches = [];
+        foreach ($recipe->ingredients_json ?? [] as $ingredient) {
+            $name = (string) ($ingredient['name'] ?? '');
+            $unit = (string) ($ingredient['unit'] ?? '');
+            $pantryItem = $pantryByKey->get($this->cookMatchKey($name, $unit));
+
+            if ($pantryItem === null) {
+                continue;
+            }
+
+            $matches[] = [
+                'pantry_item_id' => $pantryItem->id,
+                'name' => $name,
+                'unit' => $unit,
+                'recipe_quantity' => (float) ($ingredient['quantity'] ?? 0),
+                'pantry_quantity' => (float) $pantryItem->quantity,
+            ];
+        }
+
+        return view('recipes.cook', [
+            'recipe' => $recipe,
+            'matches' => $matches,
+        ]);
+    }
+
+    /**
+     * Обробка підтвердження списання (тікет 4.2 — stub). Форма вже відправна, але
+     * атомарне віднімання з комори (4.3, `PantryDeductionService`) і перехід статусу
+     * рецепту в `cooked` + `cooked_at` (4.4) — окремі тікети. Поки лише redirect.
+     */
+    public function cook(Request $request, Recipe $recipe): RedirectResponse
+    {
+        abort_unless($recipe->user_id === $request->user()->id, 403);
+
+        return redirect()
+            ->route('recipes.show', $recipe)
+            ->with('recipe-cook-flash', 'Списання комори — незабаром.');
+    }
+
+    /**
+     * Ключ зіставлення інгредієнта рецепту з позицією комори: назва (case-insensitive,
+     * без країв) + одиниця (український лейбл, що збігається з `RecipeSchema::ALLOWED_UNITS`).
+     */
+    private function cookMatchKey(string $name, string $unit): string
+    {
+        return mb_strtolower(trim($name)).'|'.trim($unit);
     }
 
     /**
