@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             IngredientSeeder::class,
             FamilyMemberSeeder::class,
             PantryItemSeeder::class,
+            RecipeSeeder::class,
         ]);
     }
 }
