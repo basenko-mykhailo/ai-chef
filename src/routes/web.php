@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\FamilyMemberController;
+use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\IngredientController;
 use App\Http\Controllers\PantryController;
 use App\Http\Controllers\ProfileController;
@@ -42,7 +43,7 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:recipe-generation')
         ->name('api.recipes.generate');
     Route::get('/api/recipes/{recipe}/status', [RecipeController::class, 'status'])->name('api.recipes.status');
-    Route::view('/history', 'placeholder', ['title' => 'Історія'])->name('history.index');
+    Route::get('/history', [HistoryController::class, 'index'])->name('history.index');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
