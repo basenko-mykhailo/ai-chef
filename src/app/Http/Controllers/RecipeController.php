@@ -7,9 +7,11 @@ use App\Http\Requests\GenerateRecipeRequest;
 use App\Jobs\GenerateRecipeJob;
 use App\Models\PantryItem;
 use App\Models\Recipe;
+use App\Services\PantryDeductionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class RecipeController extends Controller
@@ -182,17 +184,34 @@ class RecipeController extends Controller
     }
 
     /**
-     * Обробка підтвердження списання (тікет 4.2 — stub). Форма вже відправна, але
-     * атомарне віднімання з комори (4.3, `PantryDeductionService`) і перехід статусу
-     * рецепту в `cooked` + `cooked_at` (4.4) — окремі тікети. Поки лише redirect.
+     * Підтвердження «Приготовано» (тікети 4.3–4.4): атомарно списує підтверджені
+     * кількості з комори через PantryDeductionService і переводить рецепт у статус
+     * `cooked` з `cooked_at`. Кількості беруться з форми сторінки підтвердження (4.2).
      */
-    public function cook(Request $request, Recipe $recipe): RedirectResponse
+    public function cook(Request $request, Recipe $recipe, PantryDeductionService $deduction): RedirectResponse
     {
         abort_unless($recipe->user_id === $request->user()->id, 403);
 
+        $data = $request->validate([
+            'items' => ['array'],
+            'items.*.pantry_item_id' => [
+                'required',
+                'integer',
+                Rule::exists('pantry_items', 'id')->where('user_id', $request->user()->id),
+            ],
+            'items.*.quantity' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $deduction->deduct($request->user(), array_values($data['items'] ?? []));
+
+        $recipe->update([
+            'status' => 'cooked',
+            'cooked_at' => now(),
+        ]);
+
         return redirect()
             ->route('recipes.show', $recipe)
-            ->with('recipe-cook-flash', 'Списання комори — незабаром.');
+            ->with('recipe-cook-flash', 'Готово! Комору оновлено.');
     }
 
     /**

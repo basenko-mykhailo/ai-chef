@@ -80,7 +80,7 @@ class RecipeCookConfirmTest extends TestCase
         $this->assertNull($recipe->fresh()->cooked_at);
     }
 
-    public function test_cook_post_is_a_stub_that_mutates_nothing(): void
+    public function test_cook_post_deducts_pantry_and_marks_recipe_cooked(): void
     {
         $user = User::factory()->create();
         $recipe = Recipe::factory()->for($user)->completed()->create();
@@ -92,10 +92,9 @@ class RecipeCookConfirmTest extends TestCase
             ],
         ])->assertRedirect(route('recipes.show', $recipe));
 
-        $this->assertSame('800.000', $pantryItem->fresh()->quantity); // unchanged (deduction is 4.3)
-        $this->assertSame(1, PantryItem::where('user_id', $user->id)->count());
-        $this->assertSame('generated', $recipe->fresh()->status);     // status flip is 4.4
-        $this->assertNull($recipe->fresh()->cooked_at);
+        $this->assertSame('300.000', $pantryItem->fresh()->quantity); // 800 − 500 (4.3)
+        $this->assertSame('cooked', $recipe->fresh()->status);        // status flip (4.4)
+        $this->assertNotNull($recipe->fresh()->cooked_at);
     }
 
     public function test_non_owner_is_forbidden_on_confirm_and_store(): void
